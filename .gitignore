@@ -1,0 +1,24 @@
+# Local data & user state (favorites/discards live here — not for the repo)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Debug page captures
+z2.html
+zump.html
+*.debug.html
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

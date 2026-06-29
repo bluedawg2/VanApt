@@ -1,0 +1,3 @@
+# vanapt has ONE optional dependency. Everything else uses the Python stdlib
+# (http.server, sqlite3, urllib, xml, difflib) so it runs anywhere Python does.
+beautifulsoup4>=4.12   # reserved for future HTML-fallback parsing; safe to install

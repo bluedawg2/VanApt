@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>East Van &amp; Burnaby Apartments</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🏠 East Van &amp; Burnaby Apartments</div>
+  <div class="top-actions">
+    <span id="status-line" class="status-line"></span>
+    <button id="refresh-btn" class="btn primary">↻ Refresh listings</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <section class="filter-group">
+      <label class="lbl">Max price <output id="price-out">$2000</output></label>
+      <input id="price" type="range" min="800" max="2200" step="50" value="2000" />
+      <div class="row gap">
+        <button class="chip" data-price="1500">≤ $1500</button>
+        <button class="chip" data-price="1800">≤ $1800</button>
+        <button class="chip" data-price="2000">≤ $2000</button>
+      </div>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Bedrooms</label>
+      <div class="row gap wrap">
+        <label class="check"><input type="checkbox" class="beds" value="0" /> Studio</label>
+        <label class="check"><input type="checkbox" class="beds" value="1" checked /> 1 BR</label>
+        <label class="check"><input type="checkbox" class="beds" value="2" /> 2 BR</label>
+      </div>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Area</label>
+      <div class="row gap wrap">
+        <label class="check"><input type="checkbox" class="area" value="east_van" checked /> East Van</label>
+        <label class="check"><input type="checkbox" class="area" value="burnaby" checked /> Burnaby</label>
+      </div>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Sources</label>
+      <div class="row gap wrap" id="source-filters">
+        <!-- populated dynamically from /api/status -->
+      </div>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Move-in by</label>
+      <select id="available-by">
+        <option value="">Any time</option>
+        <option value="now">Available now</option>
+        <!-- month options injected dynamically -->
+      </select>
+    </section>
+
+    <section class="filter-group">
+      <label class="check"><input type="checkbox" id="include-rooms" checked /> Include roommate / room-shares</label>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Show</label>
+      <select id="status-filter">
+        <option value="active">Active (hide discarded)</option>
+        <option value="favorite">★ Favorites only</option>
+        <option value="new">Unseen / new</option>
+        <option value="discarded">Discarded</option>
+        <option value="all">Everything</option>
+      </select>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Sort by</label>
+      <select id="sort">
+        <option value="newest">Newest</option>
+        <option value="price_asc">Price: low → high</option>
+        <option value="price_desc">Price: high → low</option>
+        <option value="sqft_desc">Size (sqft)</option>
+      </select>
+    </section>
+
+    <section class="filter-group counts" id="counts"></section>
+
+    <section class="filter-group">
+      <button id="import-toggle" class="btn ghost wide">+ Add a listing manually</button>
+      <p class="hint">For Facebook Marketplace or anything you find elsewhere — paste the link &amp; details so it lives alongside the rest.</p>
+    </section>
+  </aside>
+
+  <main class="results">
+    <div class="result-bar">
+      <div id="result-head" class="result-head"></div>
+      <div class="view-toggle">
+        <button id="view-list" class="toggle-btn active">☰ List</button>
+        <button id="view-map" class="toggle-btn">🗺 Map</button>
+      </div>
+    </div>
+    <div id="cards" class="cards"></div>
+    <div id="map" class="map hidden"></div>
+    <div id="empty" class="empty hidden">No listings match these filters yet. Try widening the price or hit <b>Refresh listings</b>.</div>
+  </main>
+</div>
+
+<!-- Manual import modal -->
+<div id="import-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>Add a listing manually</h3>
+    <p class="hint">Only the link is required. Paste the full post text into "Details" and price/beds will be auto-detected.</p>
+    <label>Link (URL) *<input id="im-url" type="url" placeholder="https://www.facebook.com/marketplace/item/..." /></label>
+    <label>Title<input id="im-title" type="text" placeholder="Bright 1BR near Commercial Drive" /></label>
+    <div class="row gap">
+      <label>Price ($)<input id="im-price" type="number" placeholder="1650" /></label>
+      <label>Bedrooms<input id="im-beds" type="number" step="0.5" placeholder="1" /></label>
+    </div>
+    <div class="row gap">
+      <label>Neighborhood<input id="im-hood" type="text" placeholder="Commercial Drive" /></label>
+      <label>Area
+        <select id="im-area">
+          <option value="">(auto)</option>
+          <option value="east_van">East Van</option>
+          <option value="burnaby">Burnaby</option>
+        </select>
+      </label>
+    </div>
+    <label>Type
+      <select id="im-type">
+        <option value="unit">Whole unit</option>
+        <option value="room_share">Room / roommate</option>
+      </select>
+    </label>
+    <label>Details (paste the post)<textarea id="im-desc" rows="4"></textarea></label>
+    <label>Photo URL<input id="im-img" type="url" /></label>
+    <div class="row gap end">
+      <button id="im-cancel" class="btn ghost">Cancel</button>
+      <button id="im-save" class="btn primary">Add listing</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
