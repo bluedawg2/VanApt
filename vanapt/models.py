@@ -183,3 +183,73 @@ _ROOM_HINTS = re.compile(
 
 def looks_like_room_share(title: str, description: str = "") -> bool:
     return bool(_ROOM_HINTS.search(f"{title} {description}"))
+
+
+# ---------------------------------------------------------------------------
+# Amenity parsing  ->  flags pulled from the listing's title + description
+# ---------------------------------------------------------------------------
+_FURNISHED_RE = re.compile(r"\bfurnished\b", re.I)
+_UNFURNISHED_RE = re.compile(r"\bunfurnished\b|\bnot furnished\b|\bun-furnished\b", re.I)
+_PARKING_YES_RE = re.compile(
+    r"\b(parking included|incl[^.]{0,8}parking|with parking|underground parking|"
+    r"secure parking|covered parking|gated parking|\d+\s*parking|one parking|"
+    r"parking (stall|spot|space|spaces|available|included)|garage|carport|"
+    r"free parking|street parking included)\b", re.I)
+_PARKING_NO_RE = re.compile(
+    r"\bno parking\b|\bparking not included\b|\bstreet parking only\b|"
+    r"\bno on[- ]?site parking\b", re.I)
+_LAUNDRY_IN_RE = re.compile(
+    r"\b(in[\s-]?suite laundry|in[\s-]?unit laundry|ensuite laundry|"
+    r"laundry in[\s-]?(suite|unit)|own laundry|private laundry|"
+    r"washer\s*/?\s*&?\s*dryer in|in[\s-]?suite washer|laundry in the (suite|unit))\b", re.I)
+_LAUNDRY_SHARED_RE = re.compile(
+    r"\b(shared laundry|common laundry|coin laundry|coin[\s-]?op|"
+    r"laundry (room|on[\s-]?site|facilities)|on[\s-]?site laundry)\b", re.I)
+_LEASE_MTM_RE = re.compile(
+    r"\bmonth[\s-]?to[\s-]?month\b|\bmtm\b|\bflexible (lease|term|tenancy)\b|"
+    r"\bshort[\s-]?term\b|\bno (lease|fixed term)\b", re.I)
+_LEASE_FIXED_RE = re.compile(
+    r"(?:(?:minimum|min|fixed|lease|term)[^.\n]{0,18}?(\d{1,2})\s*(?:month|mo)\b)"
+    r"|(?:(\d{1,2})\s*(?:month|mo)\b[^.\n]{0,12}?(?:lease|term|minimum|min))", re.I)
+_LEASE_YEAR_RE = re.compile(
+    r"\b(1[\s-]?year|one[\s-]?year|12[\s-]?month|annual lease|yearly lease)\b", re.I)
+
+
+def parse_amenities(title: str, description: str = "") -> dict:
+    """Pull pet/parking/laundry/furnished/lease hints from listing text.
+
+    Returns a dict with:
+      furnished:  1 if explicitly furnished (0 = unknown / not stated)
+      parking:    1 included, 0 explicitly none, None unknown
+      laundry:    "in_suite" | "shared" | None
+      lease_term: "" | "month-to-month" | "<n>-month" | "1-year"
+    Only positive signals are recorded; silence means "unknown", never "no".
+    """
+    t = f"{title} {description}"
+    furnished = 1 if (_FURNISHED_RE.search(t) and not _UNFURNISHED_RE.search(t)) else 0
+
+    parking = None
+    if _PARKING_NO_RE.search(t):
+        parking = 0
+    elif _PARKING_YES_RE.search(t):
+        parking = 1
+
+    laundry = None
+    if _LAUNDRY_IN_RE.search(t):
+        laundry = "in_suite"
+    elif _LAUNDRY_SHARED_RE.search(t):
+        laundry = "shared"
+
+    lease_term = ""
+    if _LEASE_MTM_RE.search(t):
+        lease_term = "month-to-month"
+    else:
+        m = _LEASE_FIXED_RE.search(t)
+        if m:
+            n = m.group(1) or m.group(2)
+            lease_term = f"{int(n)}-month"
+        elif _LEASE_YEAR_RE.search(t):
+            lease_term = "1-year"
+
+    return {"furnished": furnished, "parking": parking,
+            "laundry": laundry, "lease_term": lease_term}

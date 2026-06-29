@@ -41,6 +41,11 @@ function buildQuery() {
   else if (type === "unit") { p.set("listing_type", "unit"); p.set("include_rooms", "false"); }
   else p.set("include_rooms", "true");
 
+  if ($("#f-furnished").checked) p.set("furnished", "true");
+  if ($("#f-parking").checked) p.set("parking", "true");
+  if ($("#f-laundry").checked) p.set("laundry_in_suite", "true");
+  if ($("#f-mtm").checked) p.set("month_to_month", "true");
+
   p.set("sort", $("#sort").value);
 
   const sf = $("#status-filter").value;
@@ -95,6 +100,27 @@ function availLabel(a) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(a);
   return m ? `${MONTHS[+m[2] - 1]} ${+m[3]}` : a;
 }
+function postedLabel(s) {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d)) return "";
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 30) return days + "d ago";
+  return d.toLocaleDateString();
+}
+function amenTags(x) {
+  const t = [];
+  if (x.furnished) t.push("🛋 Furnished");
+  if (x.parking === 1) t.push("🅿 Parking");
+  if (x.laundry === "in_suite") t.push("🧺 In-suite laundry");
+  else if (x.laundry === "shared") t.push("🧺 Shared laundry");
+  if (x.lease_term) t.push("📄 " + x.lease_term);
+  return t.length
+    ? `<div class="amens">${t.map((a) => `<span class="amen-tag">${esc(a)}</span>`).join("")}</div>`
+    : "";
+}
 
 function card(x) {
   const photo = x.image_url
@@ -106,10 +132,12 @@ function card(x) {
     (a) => `<a href="${esc(a.url)}" target="_blank">${SOURCE_LABEL[a.source] || a.source}</a>`
   ).join(", ");
   const avail = availLabel(x.available_date);
+  const posted = postedLabel(x.posted_at);
   const metaBits = [`<span><span class="k">${bedLabel(x.bedrooms)}</span></span>`];
   if (x.sqft) metaBits.push(`<span><span class="k">${x.sqft}</span> sqft</span>`);
   if (x.bathrooms) metaBits.push(`<span><span class="k">${x.bathrooms}</span> bath</span>`);
   if (avail) metaBits.push(`<span class="avail">📅 ${avail}</span>`);
+  if (posted) metaBits.push(`<span class="posted">🕒 ${posted}</span>`);
 
   return `<div class="card ${x.status === "discarded" ? "discarded" : ""}" data-uid="${x.uid}">
     ${photo}
@@ -119,6 +147,7 @@ function card(x) {
     <div class="body">
       <div class="title">${esc(x.title) || "(untitled)"}</div>
       <div class="meta">${metaBits.join("")}</div>
+      ${amenTags(x)}
       ${x.neighborhood || x.address ? `<div class="hood">📍 ${esc(x.neighborhood || x.address)}</div>` : ""}
       ${also ? `<div class="also">Also on: ${also}</div>` : ""}
       <div class="actions">
@@ -312,7 +341,7 @@ function init() {
     $$("[data-type]").forEach((c) => c.classList.toggle("active", c === ch));
     load();
   }));
-  $$(".beds, .area").forEach((el) => (el.onchange = load));
+  $$(".beds, .area, .amen").forEach((el) => (el.onchange = load));
   $("#status-filter").onchange = load;
   $("#sort").onchange = load;
   $("#available-by").onchange = load;

@@ -8,7 +8,7 @@ import time
 from . import config, db, dedup, scrapers
 from .geo import classify_area
 from .models import (Listing, parse_bedrooms, parse_price, parse_sqft,
-                     parse_available_date, looks_like_room_share)
+                     parse_available_date, looks_like_room_share, parse_amenities)
 
 # Refresh runs in a background thread; this tracks live status for the UI.
 _state = {"running": False, "started": None, "finished": None,
@@ -48,6 +48,7 @@ def _refresh_worker(only):
         kept = [li for li in res["listings"] if _relevant(li)]
         up = db.upsert_listings(kept)
         db.reclassify_all(classify_area)  # heal any older mis-tagged rows
+        db.backfill_amenities(parse_amenities)  # furnished/parking/laundry/lease tags
         collapsed = dedup.rebuild()
         summary = {
             "scraped": len(res["listings"]),
@@ -125,5 +126,6 @@ def manual_import(payload: dict) -> dict:
     if li.area == "other" and payload.get("area") in ("east_van", "burnaby"):
         li.area = payload["area"]
     db.upsert_listings([li])
+    db.backfill_amenities(parse_amenities)
     dedup.rebuild()
     return {"ok": True, "uid": li.uid(), "area": li.area}

@@ -59,6 +59,17 @@
     </section>
 
     <section class="filter-group">
+      <label class="lbl">Must have</label>
+      <div class="row gap wrap">
+        <label class="check"><input type="checkbox" class="amen" id="f-furnished" /> Furnished</label>
+        <label class="check"><input type="checkbox" class="amen" id="f-parking" /> Parking</label>
+        <label class="check"><input type="checkbox" class="amen" id="f-laundry" /> In-suite laundry</label>
+        <label class="check"><input type="checkbox" class="amen" id="f-mtm" /> Month-to-month</label>
+      </div>
+      <p class="hint">Filters to posts that mention it. Many Craigslist posts have only a short title, so these narrow results a lot.</p>
+    </section>
+
+    <section class="filter-group">
       <label class="lbl">Move-in by</label>
       <select id="available-by">
         <option value="">Any time</option>
@@ -90,7 +101,8 @@
     <section class="filter-group">
       <label class="lbl">Sort by</label>
       <select id="sort">
-        <option value="newest">Newest</option>
+        <option value="newest">Newest seen</option>
+        <option value="posted">Recently posted</option>
         <option value="price_asc">Price: low → high</option>
         <option value="price_desc">Price: high → low</option>
         <option value="sqft_desc">Size (sqft)</option>

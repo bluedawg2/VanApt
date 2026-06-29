@@ -86,6 +86,10 @@ select, input[type=text], input[type=url], input[type=number], textarea {
 .card .title { font-weight: 600; font-size: 15px; line-height: 1.35; max-height: 3em; overflow: hidden; }
 .card .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; color: var(--muted); }
 .card .meta .k { color: var(--ink); font-weight: 600; }
+.card .meta .posted { color: var(--muted); }
+.amens { display: flex; flex-wrap: wrap; gap: 5px; }
+.amen-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px;
+  background: #eef2ff; color: #3730a3; font-weight: 600; }
 .card .hood { font-size: 13px; color: var(--brand); }
 .card .also { font-size: 12px; color: var(--muted); }
 .card .also a { color: var(--brand); }

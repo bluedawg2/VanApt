@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS listings (
     available_date TEXT,
     posted_at     TEXT,
     contact       TEXT,
+    furnished     INTEGER,             -- 1 = furnished, 0/NULL = not stated
+    parking       INTEGER,             -- 1 = included, 0 = none, NULL = unknown
+    laundry       TEXT,                -- 'in_suite' | 'shared' | NULL
+    lease_term    TEXT,                -- 'month-to-month' | '<n>-month' | '1-year' | ''
     fingerprint   TEXT,
     dedup_group   TEXT,
     is_primary    INTEGER DEFAULT 1,   -- 1 = shown, 0 = collapsed duplicate
@@ -64,9 +68,19 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 
+_MIGRATION_COLUMNS = {  # name -> SQL type, added to old DBs that predate them
+    "furnished": "INTEGER", "parking": "INTEGER",
+    "laundry": "TEXT", "lease_term": "TEXT",
+}
+
+
 def init() -> None:
     with _lock, _conn() as c:
         c.executescript(SCHEMA)
+        have = {r["name"] for r in c.execute("PRAGMA table_info(listings)")}
+        for col, typ in _MIGRATION_COLUMNS.items():
+            if col not in have:
+                c.execute(f"ALTER TABLE listings ADD COLUMN {col} {typ}")
 
 
 def upsert_listings(items: Iterable[Listing]) -> dict:
@@ -135,6 +149,24 @@ def reclassify_all(classify) -> int:
     return changed
 
 
+def backfill_amenities(parse) -> int:
+    """Recompute amenity flags (furnished/parking/laundry/lease) for every row
+    from its stored title+description. parse(title, desc) -> dict. Returns the
+    number of rows updated."""
+    n = 0
+    with _lock, _conn() as c:
+        rows = c.execute("SELECT uid, title, description FROM listings").fetchall()
+        for r in rows:
+            a = parse(r["title"] or "", r["description"] or "")
+            c.execute(
+                "UPDATE listings SET furnished=?, parking=?, laundry=?, lease_term=? "
+                "WHERE uid=?",
+                (a["furnished"], a["parking"], a["laundry"], a["lease_term"], r["uid"]),
+            )
+            n += 1
+    return n
+
+
 def set_dedup(groups: dict[str, str], primaries: set[str]) -> None:
     """groups: uid -> group_id ; primaries: set of uids that are the shown one."""
     with _lock, _conn() as c:
@@ -156,7 +188,8 @@ def set_status(uid: str, status: str) -> bool:
 def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
           areas=None, include_rooms=True, status=None, sort="newest",
           include_other=False, sources=None, available_by=None,
-          min_sqft=None, listing_type=None) -> list[dict]:
+          min_sqft=None, listing_type=None, furnished=False, parking=False,
+          laundry_in_suite=False, month_to_month=False) -> list[dict]:
     sql = "SELECT * FROM listings WHERE is_primary=1"
     args: list = []
     if sources:
@@ -189,6 +222,14 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         sql += " AND listing_type = 'room_share'"   # shared rooms only
     elif listing_type == "unit" or not include_rooms:
         sql += " AND listing_type != 'room_share'"  # whole units only
+    if furnished:
+        sql += " AND furnished = 1"
+    if parking:
+        sql += " AND parking = 1"
+    if laundry_in_suite:
+        sql += " AND laundry = 'in_suite'"
+    if month_to_month:
+        sql += " AND lease_term = 'month-to-month'"
     if areas:
         placeholders = ",".join("?" * len(areas))
         sql += f" AND area IN ({placeholders})"
@@ -201,6 +242,7 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
 
     order = {
         "newest": "last_seen DESC",
+        "posted": "posted_at DESC NULLS LAST",
         "price_asc": "price ASC NULLS LAST",
         "price_desc": "price DESC NULLS LAST",
         "sqft_desc": "sqft DESC NULLS LAST",

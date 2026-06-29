@@ -10,6 +10,7 @@ see _decode_items() for the layout discovered from live responses.
 """
 from __future__ import annotations
 
+import datetime
 import json
 
 from .. import config
@@ -44,13 +45,15 @@ def _decode_items(data: dict, listing_type: str) -> list[Listing]:
 
     Item layout (positional):
       [0] postId delta (add to decode.minPostingId)
-      [1] posting-age code   [2] category code   [3] price
+      [1] posted-time offset (add to decode.minPostedDate, epoch seconds)
+      [2] category code   [3] price
       [4] "locIdx:descIdx~lat~lng"   [5] image-host code (ignored)
       then tagged sub-arrays + one bare-string title:
         [13, base62Id]  [4, img...]  [6, slug]  [10, "$price"]  [5, beds, sqft]
     """
     dec = data.get("decode", {})
     min_id = dec.get("minPostingId", 0)
+    min_posted = dec.get("minPostedDate", 0)
     locations = dec.get("locations", [])
     loc_descs = dec.get("locationDescriptions", [])
     cat = data.get("categoryAbbr", "apa")
@@ -59,6 +62,10 @@ def _decode_items(data: dict, listing_type: str) -> list[Listing]:
     for it in data.get("items", []):
         try:
             post_id = min_id + it[0]
+            posted_at = ""
+            if min_posted and len(it) > 1 and isinstance(it[1], (int, float)):
+                posted_at = datetime.datetime.utcfromtimestamp(
+                    min_posted + it[1]).strftime("%Y-%m-%dT%H:%M:%S")
             price = it[3] if isinstance(it[3], (int, float)) and it[3] else None
 
             lat = lng = None
@@ -126,6 +133,7 @@ def _decode_items(data: dict, listing_type: str) -> list[Listing]:
                 lng=lng,
                 image_url=image_url,
                 available_date=parse_available_date(title),
+                posted_at=posted_at,
             )
             li.area = classify_area(lat, lng, hood, title)
             out.append(li)
