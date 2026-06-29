@@ -23,6 +23,9 @@ import json
 import math
 import os
 import re
+from datetime import datetime, timezone
+
+from . import config
 
 # Downtown Eastside core ≈ Main & Hastings. Used as the *fallback* location
 # signal (Burnaby / un-geocoded listings), where real crime data isn't applied.
@@ -214,3 +217,95 @@ def safety_score(row: dict) -> dict:
             # smoothed VPD crime percentile (0-100, 100 = worst) or None when
             # outside the gridded area; persisted so the UI can filter/colour.
             "block_pct": None if pct is None else round(pct)}
+
+
+# ---- composite "Best match" score -----------------------------------------
+# Blends the things that make a listing genuinely worth her time. Each
+# component is normalized to 0..1, then combined with the user-chosen weights
+# (balanced: safety and price/value co-equal, then unit/completeness/etc).
+_BEST_WEIGHTS = {
+    "safety": 0.30,       # the heuristic safety score above
+    "price": 0.30,        # value vs. her budget (cheaper = better, to a point)
+    "unit": 0.12,         # whole unit beats a shared room
+    "completeness": 0.13, # photo + size + beds + located + real description
+    "amenities": 0.08,    # in-suite laundry / parking / furnished / month-to-month
+    "freshness": 0.07,    # recently posted ranks above stale reposts
+}
+
+
+def _freshness(row: dict) -> float:
+    """1.0 if posted today, decaying linearly to 0.0 by ~30 days. Unknown or
+    unparseable posting dates score a neutral 0.5 (never penalised for silence)."""
+    raw = (row.get("posted_at") or "").strip()
+    if not raw:
+        return 0.5
+    try:
+        d = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return 0.5
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - d).total_seconds() / 86400.0
+    if age <= 0:
+        return 1.0
+    if age >= 30:
+        return 0.0
+    return 1.0 - age / 30.0
+
+
+def best_score(row: dict, safety: int | None) -> int:
+    """Composite 0-100 ranking score for the 'Best match' sort. `safety` is the
+    already-computed safety_score (0-100) for this row; everything else is read
+    from the stored listing fields (amenities are populated before this runs)."""
+    # Safety — straight pass-through of the 0-100 heuristic (neutral if unscored).
+    s_safety = (safety if safety is not None else 50) / 100.0
+
+    # Price / value — full marks at or under target, fading to 0 by the ceiling.
+    price = row.get("price")
+    if not price:
+        s_price = 0.5  # unknown price -> neutral, don't reward or punish
+    elif price <= config.DEFAULT_TARGET_PRICE:
+        s_price = 1.0
+    else:
+        span = max(1, config.COLLECT_MAX_PRICE - config.DEFAULT_TARGET_PRICE)
+        s_price = max(0.0, 1.0 - (price - config.DEFAULT_TARGET_PRICE) / span)
+
+    # Whole unit vs. shared room — shared rooms are the explicit worry, so they
+    # rank well below a private unit but aren't zeroed out entirely.
+    s_unit = 0.15 if row.get("listing_type") == "room_share" else 1.0
+
+    # Completeness — how much we actually know about the place.
+    comp = 0.0
+    if (row.get("image_url") or "").strip():
+        comp += 0.35
+    if row.get("sqft"):
+        comp += 0.20
+    if row.get("bedrooms") is not None:
+        comp += 0.15
+    if row.get("lat") is not None or (row.get("address") or "").strip():
+        comp += 0.20
+    if len((row.get("description") or "").strip()) >= 80:
+        comp += 0.10
+    s_comp = min(1.0, comp)
+
+    # Amenities — nice-to-haves, capped at 1.0.
+    amen = 0.0
+    if row.get("laundry") == "in_suite":
+        amen += 0.40
+    elif row.get("laundry") == "shared":
+        amen += 0.15
+    if row.get("parking") == 1:
+        amen += 0.30
+    if row.get("furnished") == 1:
+        amen += 0.20
+    if row.get("lease_term") == "month-to-month":
+        amen += 0.10
+    s_amen = min(1.0, amen)
+
+    s_fresh = _freshness(row)
+
+    w = _BEST_WEIGHTS
+    total = (w["safety"] * s_safety + w["price"] * s_price + w["unit"] * s_unit
+             + w["completeness"] * s_comp + w["amenities"] * s_amen
+             + w["freshness"] * s_fresh)
+    return round(100 * total)

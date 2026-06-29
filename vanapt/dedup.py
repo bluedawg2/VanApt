@@ -19,9 +19,43 @@ def _similar_titles(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, (a or "").lower(), (b or "").lower()).ratio()
 
 
+def _weak_geo(r) -> bool:
+    """A Facebook capture with no coordinates. Its card titles are generic
+    ('1 Bed 1 Bath - House') and it has no location to disambiguate with, so
+    fuzzy title matching alone is unsafe — see _maybe_duplicate."""
+    return r["source"] == "facebook" and (r["lat"] is None or r["lng"] is None)
+
+
+# Words that say nothing about *which* unit this is. A title built only from
+# these (typical of Facebook Marketplace cards) is too generic to merge on.
+_GENERIC_TOKENS = {
+    "bed", "beds", "bedroom", "bedrooms", "bath", "baths", "bathroom",
+    "house", "apartment", "apt", "condo", "townhouse", "suite", "basement",
+    "studio", "room", "rooms", "private", "shared", "rent", "rental", "for",
+    "unit", "floor", "den", "and", "with", "near", "new", "renovated", "large",
+    "small", "cozy", "bright", "spacious", "clean", "available", "now",
+}
+
+
+def _is_generic_title(t: str) -> bool:
+    """True when nothing distinctive (a street, neighbourhood, building name…)
+    survives after dropping boilerplate words — so the title is no evidence of
+    a duplicate on its own."""
+    distinctive = [w for w in _title_tokens(t)
+                   if w not in _GENERIC_TOKENS and not w.isdigit()]
+    return not distinctive
+
+
 def _maybe_duplicate(r1, r2) -> bool:
     # Never merge a whole-unit listing with a room-share.
     if r1["listing_type"] != r2["listing_type"]:
+        return False
+
+    # Two coordinate-less Facebook posts can't be told apart from genuinely
+    # different units that happen to share a boilerplate title + price, so never
+    # auto-merge them. Exact re-imports are already collapsed by uid upstream,
+    # so this only protects distinct listings from being wrongly hidden.
+    if _weak_geo(r1) and _weak_geo(r2):
         return False
 
     # Price must match closely (allow small rounding/typo differences).
@@ -43,7 +77,15 @@ def _maybe_duplicate(r1, r2) -> bool:
         if d > 400:  # clearly different buildings
             return False
 
-    # Title similarity as the general signal.
+    # Title similarity as the general signal. When one side is a coord-less
+    # Facebook post, demand a higher bar AND corroborating price+bedrooms (both
+    # known and matching), since FB's generic titles inflate similarity.
+    if _weak_geo(r1) or _weak_geo(r2):
+        if not (p1 and p2) or b1 is None or b2 is None:
+            return False
+        if _is_generic_title(r1["title"]) or _is_generic_title(r2["title"]):
+            return False  # generic boilerplate title is no evidence on its own
+        return _similar_titles(r1["title"], r2["title"]) >= 0.75
     return _similar_titles(r1["title"], r2["title"]) >= 0.72
 
 

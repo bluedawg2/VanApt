@@ -171,6 +171,7 @@ function card(x) {
   const avail = availLabel(x.available_date);
   const posted = postedLabel(x.posted_at);
   const metaBits = [`<span><span class="k">${bedLabel(x.bedrooms)}</span></span>`];
+  if (x.best != null) metaBits.push(`<span class="best" title="Best-match score ${x.best}/100">⭐ <span class="k">${x.best}</span></span>`);
   if (x.sqft) metaBits.push(`<span><span class="k">${x.sqft}</span> sqft</span>`);
   if (x.bathrooms) metaBits.push(`<span><span class="k">${x.bathrooms}</span> bath</span>`);
   if (avail) metaBits.push(`<span class="avail">📅 ${avail}</span>`);

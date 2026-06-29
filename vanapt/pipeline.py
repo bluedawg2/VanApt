@@ -7,7 +7,7 @@ import time
 
 from . import config, db, dedup, scrapers
 from .geo import classify_area
-from .safety import safety_score
+from .safety import safety_score, best_score
 from .models import (Listing, parse_bedrooms, parse_price, parse_sqft,
                      parse_available_date, looks_like_room_share, parse_amenities)
 
@@ -50,7 +50,7 @@ def _refresh_worker(only):
         up = db.upsert_listings(kept)
         db.reclassify_all(classify_area)  # heal any older mis-tagged rows
         db.backfill_amenities(parse_amenities)  # furnished/parking/laundry/lease tags
-        db.backfill_safety(safety_score)  # heuristic vetting score (after area heal)
+        db.backfill_safety(safety_score, best_score)  # vetting + composite rank
         collapsed = dedup.rebuild()
         summary = {
             "scraped": len(res["listings"]),
@@ -132,7 +132,7 @@ def _payload_to_listing(payload: dict) -> Listing | None:
 
 def _rescore_after_import() -> None:
     db.backfill_amenities(parse_amenities)
-    db.backfill_safety(safety_score)
+    db.backfill_safety(safety_score, best_score)
     dedup.rebuild()
 
 

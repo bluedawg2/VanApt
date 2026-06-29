@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS listings (
     safety        INTEGER,             -- 0-100 heuristic vetting score (NULL = not yet scored)
     safety_flags  TEXT,                -- JSON array of {text, kind} reasons
     crime_pct     INTEGER,             -- VPD block crime percentile 0-100 (NULL = outside grid)
+    best          INTEGER,             -- 0-100 composite "best match" ranking score
     fingerprint   TEXT,
     dedup_group   TEXT,
     is_primary    INTEGER DEFAULT 1,   -- 1 = shown, 0 = collapsed duplicate
@@ -75,6 +76,7 @@ _MIGRATION_COLUMNS = {  # name -> SQL type, added to old DBs that predate them
     "furnished": "INTEGER", "parking": "INTEGER",
     "laundry": "TEXT", "lease_term": "TEXT",
     "safety": "INTEGER", "safety_flags": "TEXT", "crime_pct": "INTEGER",
+    "best": "INTEGER",
 }
 
 
@@ -171,21 +173,27 @@ def backfill_amenities(parse) -> int:
     return n
 
 
-def backfill_safety(score) -> int:
+def backfill_safety(score, best=None) -> int:
     """Recompute the heuristic safety score for every row. score(row_dict) ->
-    {'score': int, 'flags': [...]} (see safety.safety_score). Returns the
-    number of rows updated. Runs after area/amenity backfill so it can use the
-    healed area/lat/lng and full text."""
+    {'score': int, 'flags': [...]} (see safety.safety_score). If `best` is given
+    (best(row_dict, safety) -> int, see safety.best_score), the composite
+    ranking score is recomputed too. Returns the number of rows updated. Runs
+    after area/amenity backfill so it can use the healed area/lat/lng, the full
+    text and the populated amenity columns."""
     n = 0
     with _lock, _conn() as c:
         rows = c.execute(
             "SELECT uid, title, description, price, bedrooms, listing_type, "
-            "lat, lng, neighborhood, address, image_url FROM listings").fetchall()
+            "lat, lng, neighborhood, address, image_url, sqft, furnished, "
+            "parking, laundry, lease_term, posted_at FROM listings").fetchall()
         for r in rows:
-            res = score(dict(r))
-            c.execute("UPDATE listings SET safety=?, safety_flags=?, crime_pct=? WHERE uid=?",
+            d = dict(r)
+            res = score(d)
+            b = best(d, res["score"]) if best else None
+            c.execute("UPDATE listings SET safety=?, safety_flags=?, crime_pct=?, "
+                      "best=? WHERE uid=?",
                       (res["score"], json.dumps(res["flags"]),
-                       res.get("block_pct"), r["uid"]))
+                       res.get("block_pct"), b, r["uid"]))
             n += 1
     return n
 
@@ -280,6 +288,7 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         "price_desc": "price DESC NULLS LAST",
         "sqft_desc": "sqft DESC NULLS LAST",
         "safety_desc": "safety DESC NULLS LAST",
+        "best_desc": "best DESC NULLS LAST",
     }.get(sort, "last_seen DESC")
     sql += f" ORDER BY {order}"
 
