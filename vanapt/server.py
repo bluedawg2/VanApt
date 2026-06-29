@@ -28,6 +28,9 @@ def _auth_ok(header: str | None) -> bool:
     return (hmac.compare_digest(user, _AUTH_USER)
             and hmac.compare_digest(pw, _AUTH_PASS))
 
+# Bump on each deploy so /healthz reveals which build is actually live.
+VERSION = "2026-06-29-amenities-1"
+
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 _CT = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
        ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
@@ -97,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
         # Health check must bypass auth, else the platform's probe gets a 401
         # and the deploy never goes live.
         if urllib.parse.urlparse(self.path).path == "/healthz":
-            self._json({"ok": True})
+            self._json({"ok": True, "version": VERSION})
             return
         if not self._guard():
             return
