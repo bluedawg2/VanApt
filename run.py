@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import threading
 import time
 import webbrowser
@@ -16,11 +17,16 @@ import webbrowser
 from vanapt import db, pipeline
 from vanapt.server import serve
 
+# Hosted platforms (Render, Fly, Railway) inject $PORT and expect 0.0.0.0.
+_ENV_PORT = os.environ.get("PORT")
+_DEFAULT_PORT = int(_ENV_PORT) if _ENV_PORT else 8777
+_DEFAULT_HOST = os.environ.get("HOST") or ("0.0.0.0" if _ENV_PORT else "127.0.0.1")
+
 
 def main():
     ap = argparse.ArgumentParser(description="Vancouver apartment finder")
-    ap.add_argument("--port", type=int, default=8777)
-    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=_DEFAULT_PORT)
+    ap.add_argument("--host", default=_DEFAULT_HOST)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--refresh", action="store_true",
                     help="Run a one-off scrape to the database, then exit")
@@ -35,7 +41,7 @@ def main():
         print(_fmt(pipeline.status().get("last_summary")))
         return
 
-    if not args.no_browser:
+    if not args.no_browser and not _ENV_PORT:  # never auto-open on a host
         def _open():
             time.sleep(1.0)
             webbrowser.open(f"http://{args.host}:{args.port}/")

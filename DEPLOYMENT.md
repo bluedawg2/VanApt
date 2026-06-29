@@ -79,8 +79,38 @@ Rentals.ca drops off (Craigslist + Zumper + Kijiji still cover the large
 majority). If you'd rather not touch the cloud at all, **Option A** with
 Cloudflare Tunnel is the zero-cost fallback.
 
-The only code I'd add before going live is the **Basic Auth gate** and a
-**scheduled-refresh** hook — both are small. Say the word and I'll implement them.
+The **Basic Auth gate** and **scheduled-refresh** hook are now implemented (see below).
+
+---
+
+## Deploying to Render (the recommended path)
+
+Everything is wired through **`render.yaml`** (a Render Blueprint), so you don't
+click services together by hand.
+
+**Steps:**
+1. In Render: **New ▸ Blueprint**.
+2. Connect the **VanApt** GitHub repo. Render reads `render.yaml` and shows a
+   plan: one web service + a 1 GB disk + auto-refresh.
+3. It prompts for two values — **`VANAPT_USER`** and **`VANAPT_PASS`**. These are
+   the login you give your daughter. Pick anything.
+4. Click **Apply**. First build takes a few minutes; on boot it auto-runs one
+   refresh to populate the disk, then refreshes every 24h.
+5. Open the service URL, log in with the user/pass — send her that URL.
+
+**How the moving parts map to the app:**
+| Concern | How it's handled |
+|---|---|
+| Password | `VANAPT_USER` + `VANAPT_PASS` env vars → HTTP Basic Auth (`server.py`). Unset locally = no password. |
+| Persistent favorites | SQLite on the mounted disk via `VANAPT_DATA_DIR=/var/data`. Survives deploys. |
+| Daily refresh | `VANAPT_REFRESH_HOURS=24` → internal scheduler thread (no separate cron, because a Render disk attaches to only one service). |
+| Bind address / port | `run.py` auto-uses `$PORT` and `0.0.0.0` when hosted; stays `127.0.0.1:8777` locally. |
+| Auto-deploy | `autoDeploy: true` → every `git push` redeploys. |
+
+**Cost:** the blueprint uses the **Starter** plan ($7/mo, always-on). To test for
+free first, change `plan: starter` to `plan: free` in `render.yaml` (it sleeps
+when idle — first load after a quiet spell is slow, and the in-process scheduler
+only runs while it's awake).
 
 ## One caveat (legal/ToS)
 These sites' terms discourage scraping. Keeping this **personal, low-volume, and

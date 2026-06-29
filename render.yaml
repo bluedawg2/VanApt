@@ -1,0 +1,38 @@
+# Render Blueprint — creates the whole deployment from this one file.
+# In Render: New ▸ Blueprint ▸ connect the VanApt repo ▸ Apply.
+#
+# What it provisions:
+#   - one always-on web service (the dashboard + API)
+#   - a 1 GB persistent disk for the SQLite DB (favorites/discards survive deploys)
+#   - an internal scheduler that auto-refreshes listings every 24h
+#     (kept inside the web process because a Render disk attaches to only one
+#     service, so a separate cron job can't share the same SQLite file)
+#
+# You will be prompted for VANAPT_USER / VANAPT_PASS on first apply — those are
+# the login your daughter uses. Pick anything you like.
+
+services:
+  - type: web
+    name: vanapt
+    runtime: python
+    plan: starter            # $7/mo, always-on (no cold starts). Use "free" to test (sleeps when idle).
+    region: oregon           # closest Render region to Vancouver
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    autoDeploy: true         # redeploy automatically on git push
+    healthCheckPath: /
+    disk:
+      name: vanapt-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: VANAPT_DATA_DIR        # SQLite lives on the persistent disk
+        value: /var/data
+      - key: VANAPT_REFRESH_HOURS   # auto-refresh interval (hours)
+        value: "24"
+      - key: VANAPT_USER            # login username — you set this on apply
+        sync: false
+      - key: VANAPT_PASS            # login password — you set this on apply
+        sync: false

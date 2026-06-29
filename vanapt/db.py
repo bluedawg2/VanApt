@@ -11,7 +11,11 @@ from typing import Iterable, Optional
 
 from .models import Listing
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "listings.db")
+# Data dir is overridable so a hosted deployment can point it at a mounted
+# persistent disk (set VANAPT_DATA_DIR) shared by the web + refresh processes.
+_DATA_DIR = os.environ.get("VANAPT_DATA_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "data")
+_DB_PATH = os.path.join(_DATA_DIR, "listings.db")
 _lock = threading.Lock()
 
 

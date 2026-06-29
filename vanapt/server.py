@@ -1,12 +1,32 @@
 """Stdlib HTTP server: JSON API + static web UI. No framework dependencies."""
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import os
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import config, db, pipeline
+
+# Optional HTTP Basic Auth. Active only when BOTH env vars are set, so local
+# use stays password-free; a hosted deployment sets them to gate access.
+_AUTH_USER = os.environ.get("VANAPT_USER") or ""
+_AUTH_PASS = os.environ.get("VANAPT_PASS") or ""
+_AUTH_ON = bool(_AUTH_USER and _AUTH_PASS)
+
+
+def _auth_ok(header: str | None) -> bool:
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        user, _, pw = base64.b64decode(header[6:]).decode("utf-8").partition(":")
+    except Exception:
+        return False
+    # constant-time compare on both fields to avoid timing leaks
+    return (hmac.compare_digest(user, _AUTH_USER)
+            and hmac.compare_digest(pw, _AUTH_PASS))
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 _CT = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -23,6 +43,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *a):  # quieter console
         pass
+
+    # ---- auth ----
+    def _guard(self) -> bool:
+        """Return True if the request may proceed. Sends a 401 challenge if not."""
+        if not _AUTH_ON or _auth_ok(self.headers.get("Authorization")):
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="vanapt"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
 
     # ---- helpers ----
     def _json(self, obj, code=200):
@@ -60,6 +91,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- routing ----
     def do_GET(self):
+        if not self._guard():
+            return
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
         one = lambda k, d=None: q.get(k, [d])[0]
@@ -98,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
             self._static(u.path)
 
     def do_POST(self):
+        if not self._guard():
+            return
         u = urllib.parse.urlparse(self.path)
         if u.path == "/api/refresh":
             body = self._body()
@@ -113,11 +148,47 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
 
+def _start_scheduler():
+    """If VANAPT_REFRESH_HOURS is set, refresh the DB on that interval in a
+    background thread. Used by hosted deployments so listings stay current
+    without anyone clicking — sidesteps Render's one-disk-per-service limit by
+    keeping the scrape inside the web process that owns the disk."""
+    import threading
+
+    try:
+        hours = float(os.environ.get("VANAPT_REFRESH_HOURS") or 0)
+    except ValueError:
+        hours = 0
+    if hours <= 0:
+        return
+
+    def _loop():
+        import time as _t
+        # Populate right away on a fresh deploy (empty disk), else wait a cycle.
+        try:
+            if not db.counts().get("total"):
+                pipeline.refresh(blocking=True)
+        except Exception as e:
+            print(f"  initial refresh failed: {e}")
+        while True:
+            _t.sleep(hours * 3600)
+            try:
+                pipeline.refresh(blocking=True)
+            except Exception as e:  # never let the scheduler die
+                print(f"  scheduled refresh failed: {e}")
+
+    threading.Thread(target=_loop, daemon=True).start()
+    print(f"  auto-refresh every {hours:g}h enabled")
+
+
 def serve(host="127.0.0.1", port=8777):
     db.init()
+    _start_scheduler()
     httpd = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"\n  vanapt running -> {url}")
+    if _AUTH_ON:
+        print(f"  basic auth: ON (user '{_AUTH_USER}')")
     print("  (Ctrl+C to stop)\n")
     try:
         httpd.serve_forever()
