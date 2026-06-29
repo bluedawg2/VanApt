@@ -19,13 +19,57 @@ Buckets (each reason is tagged so the card can colour it):
 """
 from __future__ import annotations
 
+import json
 import math
+import os
 import re
 
-# Downtown Eastside core ≈ Main & Hastings. Distance from here is the single
-# most defensible location signal in Vancouver (publicly, widely documented as
-# the city's highest-need area). We stay conservative elsewhere.
+# Downtown Eastside core ≈ Main & Hastings. Used as the *fallback* location
+# signal (Burnaby / un-geocoded listings), where real crime data isn't applied.
 _DTES = (49.2815, -123.0997)
+
+# Block-level crime grid (East Vancouver), precomputed offline from VPD GeoDASH
+# open data by scripts/build_crime_grid.py. Each cell stores a 0-100 crime
+# percentile (100 = worst East Van block). Loaded once; absence -> graceful
+# fallback to the DTES-distance model below.
+_GRID_PATH = os.path.join(os.path.dirname(__file__), "crime_grid.json")
+
+
+def _load_grid():
+    try:
+        with open(_GRID_PATH, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, ValueError):
+        return {}, None, None, ""
+    meta = payload.get("meta", {})
+    yrs = meta.get("years") or []
+    label = ""
+    if yrs:
+        label = yrs[0] if yrs[0] == yrs[-1] else f"{yrs[0]}–{yrs[-1][-2:]}"
+    return payload.get("grid", {}), meta.get("dlat"), meta.get("dlng"), label
+
+
+_GRID, _GDLAT, _GDLNG, _YEARS_LABEL = _load_grid()
+
+
+def _block_pct(lat, lng):
+    """Crime percentile (0-100, 100 = worst) for a listing's ~150m block,
+    smoothed over the cell + its 8 neighbours (centre weighted double).
+    Returns None when the point is outside the gridded area (e.g. Burnaby)."""
+    if not _GRID or _GDLAT is None or lat is None or lng is None:
+        return None
+    i = math.floor(lat / _GDLAT)
+    j = math.floor(lng / _GDLNG)
+    tot = wsum = 0.0
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            v = _GRID.get(f"{i + di},{j + dj}")
+            if v is None:
+                continue
+            wt = 2.0 if (di == 0 and dj == 0) else 1.0
+            tot += v * wt
+            wsum += wt
+    return (tot / wsum) if wsum else None
 
 # ---- scam / fraud red flags (strongest, most actionable signal) -----------
 _SCAM_PATTERNS = [
@@ -117,11 +161,24 @@ def safety_score(row: dict) -> dict:
         elif _CO_ED.search(text):
             hit(-4, "Co-ed / mixed household", "room")
 
-    # 3) Location: distance to the Downtown Eastside core
+    # 3) Location risk. Prefer real VPD block-level crime data (East Van);
+    #    fall back to Downtown-Eastside distance where we have no grid coverage
+    #    (Burnaby, or un-geocoded listings).
     lat, lng = row.get("lat"), row.get("lng")
-    located = False
-    if lat is not None and lng is not None:
-        located = True
+    pct = _block_pct(lat, lng)
+    yr = f" (VPD {_YEARS_LABEL})" if _YEARS_LABEL else ""
+    if pct is not None:
+        if pct >= 95:
+            hit(-34, f"Crime hotspot — worst ~5% of East Van blocks{yr}", "location")
+        elif pct >= 85:
+            hit(-24, f"Higher-crime block — top 15% nearby{yr}", "location")
+        elif pct >= 70:
+            hit(-13, f"Above-average reported crime nearby{yr}", "location")
+        elif pct >= 50:
+            hit(-5, "About the East Van median for reported crime", "location")
+        elif pct < 25:
+            hit(+4, f"Quiet block — low reported crime{yr}", "plus")
+    elif lat is not None and lng is not None:
         d = _haversine_km(lat, lng, *_DTES)
         if d < 0.7:
             hit(-30, "In / right beside the Downtown Eastside", "location")
@@ -129,7 +186,7 @@ def safety_score(row: dict) -> dict:
             hit(-16, "On the edge of the Downtown Eastside", "location")
         elif d < 2.2:
             hit(-7, "Within ~2 km of the Downtown Eastside", "location")
-    if not located and _DTES_TEXT.search(f"{title} {row.get('neighborhood','')} {row.get('address','')}"):
+    elif _DTES_TEXT.search(f"{title} {row.get('neighborhood','')} {row.get('address','')}"):
         hit(-20, "Listing mentions the Downtown Eastside area", "location")
 
     # 4) Unusually low price (bait) — whole units only; cheap rooms are normal
