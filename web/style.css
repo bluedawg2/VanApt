@@ -44,7 +44,7 @@ select, input[type=text], input[type=url], input[type=number], textarea {
 .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
   padding: 5px 12px; cursor: pointer; font-size: 13px; }
 .chip:hover, .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
-.hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; line-height: 1.4; }
+.hint { font-size: 11px; color: var(--muted); margin: 3px 0 0; line-height: 1.35; }
 .counts { font-size: 13px; color: var(--muted); gap: 3px; border-top: 1px solid var(--line); padding-top: 14px; }
 .counts b { color: var(--ink); }
 
