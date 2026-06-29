@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 # ---- Default filters (the UI can override these per request) --------------
-DEFAULT_MAX_PRICE = 2000          # hard cap on what we even collect
-DEFAULT_TARGET_PRICE = 1500       # the "most likely" target she'll slide down to
+DEFAULT_MAX_PRICE = 1500          # default budget shown in the UI (slide up to COLLECT_MAX_PRICE)
+DEFAULT_TARGET_PRICE = 1500       # the "most likely" target
 DEFAULT_MIN_BEDROOMS = 1
 DEFAULT_MAX_BEDROOMS = 1
 INCLUDE_ROOM_SHARES = True        # 2BR looking-for-roommate / room-in-shared

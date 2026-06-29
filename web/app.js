@@ -33,7 +33,14 @@ function buildQuery() {
   const avail = $("#available-by").value;
   if (avail) p.set("available_by", avail);
 
-  p.set("include_rooms", $("#include-rooms").checked);
+  const sqft = Number($("#sqft").value);
+  if (sqft > 0) p.set("min_sqft", sqft);
+
+  const type = ($("#type-filters .chip.active") || {}).dataset?.type || "all";
+  if (type === "room") p.set("listing_type", "room_share");
+  else if (type === "unit") { p.set("listing_type", "unit"); p.set("include_rooms", "false"); }
+  else p.set("include_rooms", "true");
+
   p.set("sort", $("#sort").value);
 
   const sf = $("#status-filter").value;
@@ -287,14 +294,25 @@ function init() {
   const out = $("#price-out");
   const sync = () => (out.textContent = "$" + Number(price.value).toLocaleString());
   price.oninput = sync; price.onchange = load; sync();
+
+  const sqft = $("#sqft");
+  const sqftOut = $("#sqft-out");
+  const sqftSync = () => (sqftOut.textContent = Number(sqft.value) > 0 ? sqft.value + " sqft" : "Any");
+  sqft.oninput = sqftSync; sqft.onchange = load; sqftSync();
   buildMonthOptions();
 
-  $$(".chip").forEach((ch) => (ch.onclick = () => {
+  // Price chips set the slider; keep their active state in sync with the slider.
+  $$("[data-price]").forEach((ch) => (ch.onclick = () => {
     price.value = ch.dataset.price; sync();
-    $$(".chip").forEach((c) => c.classList.toggle("active", c === ch));
+    $$("[data-price]").forEach((c) => c.classList.toggle("active", c === ch));
     load();
   }));
-  $$(".beds, .area, #include-rooms").forEach((el) => (el.onchange = load));
+  // Listing-type chips (All / Whole units / Shared rooms) are single-select.
+  $$("[data-type]").forEach((ch) => (ch.onclick = () => {
+    $$("[data-type]").forEach((c) => c.classList.toggle("active", c === ch));
+    load();
+  }));
+  $$(".beds, .area").forEach((el) => (el.onchange = load));
   $("#status-filter").onchange = load;
   $("#sort").onchange = load;
   $("#available-by").onchange = load;

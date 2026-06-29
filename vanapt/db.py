@@ -155,7 +155,8 @@ def set_status(uid: str, status: str) -> bool:
 
 def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
           areas=None, include_rooms=True, status=None, sort="newest",
-          include_other=False, sources=None, available_by=None) -> list[dict]:
+          include_other=False, sources=None, available_by=None,
+          min_sqft=None, listing_type=None) -> list[dict]:
     sql = "SELECT * FROM listings WHERE is_primary=1"
     args: list = []
     if sources:
@@ -173,14 +174,21 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
     if min_price is not None:
         sql += " AND (price IS NULL OR price >= ?)"
         args.append(min_price)
+    if min_sqft is not None:
+        # Keep listings with unknown size (sqft IS NULL) rather than hiding them
+        # just for missing data — same policy as price/bedrooms.
+        sql += " AND (sqft IS NULL OR sqft >= ?)"
+        args.append(min_sqft)
     if min_bedrooms is not None:
         sql += " AND (bedrooms IS NULL OR bedrooms >= ?)"
         args.append(min_bedrooms)
     if max_bedrooms is not None:
         sql += " AND (bedrooms IS NULL OR bedrooms <= ?)"
         args.append(max_bedrooms)
-    if not include_rooms:
-        sql += " AND listing_type != 'room_share'"
+    if listing_type == "room_share":
+        sql += " AND listing_type = 'room_share'"   # shared rooms only
+    elif listing_type == "unit" or not include_rooms:
+        sql += " AND listing_type != 'room_share'"  # whole units only
     if areas:
         placeholders = ",".join("?" * len(areas))
         sql += f" AND area IN ({placeholders})"

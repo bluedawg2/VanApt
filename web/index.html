@@ -19,13 +19,19 @@
 <div class="layout">
   <aside class="sidebar">
     <section class="filter-group">
-      <label class="lbl">Max price <output id="price-out">$2000</output></label>
-      <input id="price" type="range" min="800" max="2200" step="50" value="2000" />
+      <label class="lbl">Max price <output id="price-out">$1500</output></label>
+      <input id="price" type="range" min="800" max="2200" step="50" value="1500" />
       <div class="row gap">
-        <button class="chip" data-price="1500">≤ $1500</button>
+        <button class="chip active" data-price="1500">≤ $1500</button>
         <button class="chip" data-price="1800">≤ $1800</button>
         <button class="chip" data-price="2000">≤ $2000</button>
       </div>
+    </section>
+
+    <section class="filter-group">
+      <label class="lbl">Min size <output id="sqft-out">Any</output></label>
+      <input id="sqft" type="range" min="0" max="1200" step="50" value="0" />
+      <p class="hint">Listings with no stated size are kept.</p>
     </section>
 
     <section class="filter-group">
@@ -41,7 +47,7 @@
       <label class="lbl">Area</label>
       <div class="row gap wrap">
         <label class="check"><input type="checkbox" class="area" value="east_van" checked /> East Van</label>
-        <label class="check"><input type="checkbox" class="area" value="burnaby" checked /> Burnaby</label>
+        <label class="check"><input type="checkbox" class="area" value="burnaby" /> Burnaby</label>
       </div>
     </section>
 
@@ -62,7 +68,12 @@
     </section>
 
     <section class="filter-group">
-      <label class="check"><input type="checkbox" id="include-rooms" checked /> Include roommate / room-shares</label>
+      <label class="lbl">Listing type</label>
+      <div class="row gap wrap" id="type-filters">
+        <button class="chip active" data-type="all">All</button>
+        <button class="chip" data-type="unit">Whole units</button>
+        <button class="chip" data-type="room">Shared rooms</button>
+      </div>
     </section>
 
     <section class="filter-group">
