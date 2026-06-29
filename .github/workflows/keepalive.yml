@@ -1,0 +1,34 @@
+name: Keep VanApt awake
+
+# Render's free tier sleeps a service after ~15 min with no inbound traffic, and
+# wipes its disk on sleep (losing manual imports + forcing a slow re-scrape on
+# wake). This pings the public health check every ~10 min so it never sleeps.
+# /healthz bypasses HTTP Basic Auth, so no credentials are needed here.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (UTC)
+  workflow_dispatch: {}       # also runnable on demand from the Actions tab
+
+# If a previous ping is somehow still running, don't pile up.
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /healthz
+        run: |
+          url="https://vanapt.onrender.com/healthz"
+          # Generous timeout + retries: a cold start can take a couple minutes,
+          # and we want the ping to actually wake it, not give up early.
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+                   --max-time 180 --retry 5 --retry-delay 15 --retry-connrefused \
+                   "$url" || true)
+          echo "healthz -> HTTP $code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          test "$code" = "200"
