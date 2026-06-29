@@ -86,6 +86,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", _CT.get(ext, "application/octet-stream"))
         self.send_header("Content-Length", str(len(data)))
+        # Always revalidate so a redeploy's new HTML/JS/CSS shows immediately
+        # instead of the browser serving a stale cached copy.
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
         self.end_headers()
         self.wfile.write(data)
 
