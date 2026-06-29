@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS listings (
     parking       INTEGER,             -- 1 = included, 0 = none, NULL = unknown
     laundry       TEXT,                -- 'in_suite' | 'shared' | NULL
     lease_term    TEXT,                -- 'month-to-month' | '<n>-month' | '1-year' | ''
+    safety        INTEGER,             -- 0-100 heuristic vetting score (NULL = not yet scored)
+    safety_flags  TEXT,                -- JSON array of {text, kind} reasons
     fingerprint   TEXT,
     dedup_group   TEXT,
     is_primary    INTEGER DEFAULT 1,   -- 1 = shown, 0 = collapsed duplicate
@@ -71,6 +73,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 _MIGRATION_COLUMNS = {  # name -> SQL type, added to old DBs that predate them
     "furnished": "INTEGER", "parking": "INTEGER",
     "laundry": "TEXT", "lease_term": "TEXT",
+    "safety": "INTEGER", "safety_flags": "TEXT",
 }
 
 
@@ -167,6 +170,24 @@ def backfill_amenities(parse) -> int:
     return n
 
 
+def backfill_safety(score) -> int:
+    """Recompute the heuristic safety score for every row. score(row_dict) ->
+    {'score': int, 'flags': [...]} (see safety.safety_score). Returns the
+    number of rows updated. Runs after area/amenity backfill so it can use the
+    healed area/lat/lng and full text."""
+    n = 0
+    with _lock, _conn() as c:
+        rows = c.execute(
+            "SELECT uid, title, description, price, bedrooms, listing_type, "
+            "lat, lng, neighborhood, address, image_url FROM listings").fetchall()
+        for r in rows:
+            res = score(dict(r))
+            c.execute("UPDATE listings SET safety=?, safety_flags=? WHERE uid=?",
+                      (res["score"], json.dumps(res["flags"]), r["uid"]))
+            n += 1
+    return n
+
+
 def set_dedup(groups: dict[str, str], primaries: set[str]) -> None:
     """groups: uid -> group_id ; primaries: set of uids that are the shown one."""
     with _lock, _conn() as c:
@@ -189,7 +210,7 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
           areas=None, include_rooms=True, status=None, sort="newest",
           include_other=False, sources=None, available_by=None,
           min_sqft=None, listing_type=None, furnished=False, parking=False,
-          laundry_in_suite=False, month_to_month=False) -> list[dict]:
+          laundry_in_suite=False, month_to_month=False, min_safety=None) -> list[dict]:
     sql = "SELECT * FROM listings WHERE is_primary=1"
     args: list = []
     if sources:
@@ -230,6 +251,11 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         sql += " AND laundry = 'in_suite'"
     if month_to_month:
         sql += " AND lease_term = 'month-to-month'"
+    if min_safety is not None:
+        # Unscored rows (safety IS NULL) are kept rather than hidden for missing
+        # data — same policy as price/sqft. They get scored on the next refresh.
+        sql += " AND (safety IS NULL OR safety >= ?)"
+        args.append(min_safety)
     if areas:
         placeholders = ",".join("?" * len(areas))
         sql += f" AND area IN ({placeholders})"
@@ -246,6 +272,7 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         "price_asc": "price ASC NULLS LAST",
         "price_desc": "price DESC NULLS LAST",
         "sqft_desc": "sqft DESC NULLS LAST",
+        "safety_desc": "safety DESC NULLS LAST",
     }.get(sort, "last_seen DESC")
     sql += f" ORDER BY {order}"
 
@@ -254,6 +281,10 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         out = []
         for r in rows:
             d = dict(r)
+            try:
+                d["safety_flags"] = json.loads(d["safety_flags"]) if d.get("safety_flags") else []
+            except (TypeError, ValueError):
+                d["safety_flags"] = []
             # Attach the other source links in this dedup group.
             dupes = c.execute(
                 "SELECT source, url FROM listings WHERE dedup_group=? AND uid!=?",

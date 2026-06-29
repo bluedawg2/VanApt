@@ -87,6 +87,30 @@ select, input[type=text], input[type=url], input[type=number], textarea {
 .card .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; color: var(--muted); }
 .card .meta .k { color: var(--ink); font-weight: 600; }
 .card .meta .posted { color: var(--muted); }
+/* Safety: coloured corner badge + collapsible "why" note + map popup line */
+.badge.safety { color: #fff; font-weight: 700; }
+.badge.safety.good { background: rgba(22,163,74,.92); }
+.badge.safety.warn { background: rgba(217,119,6,.92); }
+.badge.safety.bad  { background: rgba(220,38,38,.92); }
+.badge.safety.unk  { background: rgba(107,114,128,.9); }
+
+.safety-note { font-size: 12px; border-radius: 8px; padding: 4px 8px; border: 1px solid var(--line); }
+.safety-note.good { background: #f0fdf4; border-color: #bbf7d0; }
+.safety-note.warn { background: #fffbeb; border-color: #fde68a; }
+.safety-note.bad  { background: #fef2f2; border-color: #fecaca; }
+.safety-note.unk  { background: #f9fafb; }
+.safety-note summary { cursor: pointer; font-weight: 600; color: var(--ink); list-style: none; }
+.safety-note summary::-webkit-details-marker { display: none; }
+.safety-note summary::before { content: "▸ "; color: var(--muted); }
+.safety-note[open] summary::before { content: "▾ "; }
+.sf-reasons { display: flex; flex-direction: column; gap: 3px; margin-top: 5px; }
+.sf-reason { color: #b45309; }
+.sf-reason.plus { color: var(--good); }
+.pop-safety { font-size: 12px; font-weight: 600; margin: 2px 0; }
+.pop-safety.good { color: var(--good); }
+.pop-safety.warn { color: #b45309; }
+.pop-safety.bad  { color: var(--bad); }
+
 .amens { display: flex; flex-wrap: wrap; gap: 5px; }
 .amen-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px;
   background: #eef2ff; color: #3730a3; font-weight: 600; }

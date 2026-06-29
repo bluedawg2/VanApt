@@ -36,6 +36,9 @@ function buildQuery() {
   const sqft = Number($("#sqft").value);
   if (sqft > 0) p.set("min_sqft", sqft);
 
+  const safety = Number($("#safety").value);
+  if (safety > 0) p.set("min_safety", safety);
+
   const type = ($("#type-filters .chip.active") || {}).dataset?.type || "all";
   if (type === "room") p.set("listing_type", "room_share");
   else if (type === "unit") { p.set("listing_type", "unit"); p.set("include_rooms", "false"); }
@@ -110,6 +113,38 @@ function postedLabel(s) {
   if (days < 30) return days + "d ago";
   return d.toLocaleDateString();
 }
+function safetyClass(s) {
+  if (s == null) return "unk";
+  if (s >= 80) return "good";
+  if (s >= 60) return "warn";
+  return "bad";
+}
+function safetyLabel(s) {
+  if (s == null) return "Not scored";
+  if (s >= 80) return "Looks fine";
+  if (s >= 60) return "Some caution";
+  return "Caution";
+}
+// Small coloured shield badge for the photo corner.
+function safetyBadge(x) {
+  if (x.safety == null) return "";
+  return `<span class="badge safety ${safetyClass(x.safety)}" title="Safety score ${x.safety}/100">🛡 ${x.safety}</span>`;
+}
+// Expanded "why" line under the card body (cautions first, then positives).
+function safetyNote(x) {
+  const f = x.safety_flags || [];
+  if (x.safety == null && !f.length) return "";
+  const cls = safetyClass(x.safety);
+  const cautions = f.filter((r) => r.kind !== "plus");
+  const plus = f.filter((r) => r.kind === "plus");
+  const reasons = [...cautions, ...plus].slice(0, 4)
+    .map((r) => `<span class="sf-reason ${r.kind === "plus" ? "plus" : ""}">${r.kind === "plus" ? "✓" : "⚠"} ${esc(r.text)}</span>`)
+    .join("");
+  return `<details class="safety-note ${cls}">
+    <summary>🛡 Safety ${x.safety}/100 · ${safetyLabel(x.safety)}</summary>
+    <div class="sf-reasons">${reasons || "<span class='sf-reason'>No specific flags — score from defaults.</span>"}</div>
+  </details>`;
+}
 function amenTags(x) {
   const t = [];
   if (x.furnished) t.push("🛋 Furnished");
@@ -142,12 +177,13 @@ function card(x) {
   return `<div class="card ${x.status === "discarded" ? "discarded" : ""}" data-uid="${x.uid}">
     ${photo}
       <span class="price">${price}</span>
-      <span class="badges"><span class="badge src">${SOURCE_LABEL[x.source] || x.source}</span>${room}</span>
+      <span class="badges">${safetyBadge(x)}<span class="badge src">${SOURCE_LABEL[x.source] || x.source}</span>${room}</span>
     </div>
     <div class="body">
       <div class="title">${esc(x.title) || "(untitled)"}</div>
       <div class="meta">${metaBits.join("")}</div>
       ${amenTags(x)}
+      ${safetyNote(x)}
       ${x.neighborhood || x.address ? `<div class="hood">📍 ${esc(x.neighborhood || x.address)}</div>` : ""}
       ${also ? `<div class="also">Also on: ${also}</div>` : ""}
       <div class="actions">
@@ -201,6 +237,7 @@ function renderMap(items) {
         ${x.image_url ? `<img src="${esc(x.image_url)}" />` : ""}
         <div class="pop-price">${x.price ? "$" + x.price.toLocaleString() : "Ask"} · ${bedLabel(x.bedrooms)}${avail ? " · 📅 " + avail : ""}</div>
         <div class="pop-title">${esc(x.title)}</div>
+        ${x.safety != null ? `<div class="pop-safety ${safetyClass(x.safety)}">🛡 Safety ${x.safety}/100 · ${safetyLabel(x.safety)}</div>` : ""}
         <div class="pop-hood">${esc(x.neighborhood || x.address)} <span class="pop-src">${SOURCE_LABEL[x.source] || x.source}</span></div>
         <div class="pop-actions">
           <a href="${esc(x.url)}" target="_blank">View ↗</a>
@@ -328,6 +365,11 @@ function init() {
   const sqftOut = $("#sqft-out");
   const sqftSync = () => (sqftOut.textContent = Number(sqft.value) > 0 ? sqft.value + " sqft" : "Any");
   sqft.oninput = sqftSync; sqft.onchange = load; sqftSync();
+
+  const safety = $("#safety");
+  const safetyOut = $("#safety-out");
+  const safetySync = () => (safetyOut.textContent = Number(safety.value) > 0 ? safety.value + "+" : "Any");
+  safety.oninput = safetySync; safety.onchange = load; safetySync();
   buildMonthOptions();
 
   // Price chips set the slider; keep their active state in sync with the slider.

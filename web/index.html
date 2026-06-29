@@ -35,6 +35,12 @@
     </section>
 
     <section class="filter-group">
+      <label class="lbl">Min safety <output id="safety-out">Any</output></label>
+      <input id="safety" type="range" min="0" max="90" step="10" value="0" />
+      <p class="hint">A vetting score (0–100) from scam red-flags, shared-room risk, and distance from the Downtown Eastside. Higher = fewer concerns. Listings not yet scored are kept.</p>
+    </section>
+
+    <section class="filter-group">
       <label class="lbl">Bedrooms</label>
       <div class="row gap wrap">
         <label class="check"><input type="checkbox" class="beds" value="0" /> Studio</label>
@@ -106,6 +112,7 @@
         <option value="price_asc">Price: low → high</option>
         <option value="price_desc">Price: high → low</option>
         <option value="sqft_desc">Size (sqft)</option>
+        <option value="safety_desc">Safest first</option>
       </select>
     </section>
 
