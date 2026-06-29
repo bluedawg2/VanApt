@@ -369,6 +369,27 @@ async function saveImport() {
   } else { toast(r.error || "Could not add"); }
 }
 
+// ---- Facebook Marketplace bulk import -------------------------------------
+function openFb(open) { $("#fb-modal").classList.toggle("hidden", !open); }
+async function importFacebook() {
+  let items;
+  try { items = JSON.parse(($("#fb-json").value || "").trim()); }
+  catch (e) {
+    toast("That doesn't look like the copied data — click the bookmark again, then paste.");
+    return;
+  }
+  if (!Array.isArray(items) || !items.length) { toast("No listings found in what you pasted."); return; }
+  const r = await fetch("/api/import_bulk", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  }).then((r) => r.json());
+  if (r.ok) {
+    toast(`Imported ${r.imported} listing${r.imported === 1 ? "" : "s"}` +
+          (r.skipped ? ` (${r.skipped} skipped)` : "") + " ✓");
+    openFb(false); $("#fb-json").value = ""; load();
+  } else { toast(r.error || "Import failed"); }
+}
+
 // ---- wiring ---------------------------------------------------------------
 function init() {
   const price = $("#price");
@@ -406,6 +427,10 @@ function init() {
   $("#refresh-btn").onclick = refresh;
   $("#view-list").onclick = () => showMap(false);
   $("#view-map").onclick = () => showMap(true);
+  $("#fb-toggle").onclick = () => openFb(true);
+  $("#fb-cancel").onclick = () => openFb(false);
+  $("#fb-import").onclick = importFacebook;
+  $("#fb-modal").onclick = (e) => { if (e.target.id === "fb-modal") openFb(false); };
   $("#import-toggle").onclick = () => openImport(true);
   $("#im-cancel").onclick = () => openImport(false);
   $("#im-save").onclick = saveImport;

@@ -83,12 +83,12 @@ def refresh(only=None, blocking=False) -> dict:
     return {"started": True}
 
 
-def manual_import(payload: dict) -> dict:
-    """Add a listing by hand (e.g. a Facebook Marketplace post she found).
-    Required: url. Everything else is parsed from a pasted blob or fields."""
+def _payload_to_listing(payload: dict) -> Listing | None:
+    """Build a Listing from a hand-entered / captured payload. Returns None if
+    there's no usable URL. Shared by single and bulk import."""
     url = (payload.get("url") or "").strip()
     if not url:
-        return {"ok": False, "error": "url is required"}
+        return None
 
     blob = " ".join(str(payload.get(k, "")) for k in ("title", "description", "raw"))
     price = payload.get("price")
@@ -124,11 +124,48 @@ def manual_import(payload: dict) -> dict:
     )
     li.area = classify_area(payload.get("lat"), payload.get("lng"),
                             hood, title, desc) if (hood or title or desc) else "other"
-    # Manual imports are trusted even if area can't be determined.
+    # Manual/captured imports are trusted even if area can't be determined.
     if li.area == "other" and payload.get("area") in ("east_van", "burnaby"):
         li.area = payload["area"]
-    db.upsert_listings([li])
+    return li
+
+
+def _rescore_after_import() -> None:
     db.backfill_amenities(parse_amenities)
     db.backfill_safety(safety_score)
     dedup.rebuild()
+
+
+def manual_import(payload: dict) -> dict:
+    """Add a single listing by hand (e.g. a Facebook Marketplace post she found).
+    Required: url. Everything else is parsed from a pasted blob or fields."""
+    li = _payload_to_listing(payload)
+    if li is None:
+        return {"ok": False, "error": "url is required"}
+    db.upsert_listings([li])
+    _rescore_after_import()
     return {"ok": True, "uid": li.uid(), "area": li.area}
+
+
+def manual_import_bulk(items) -> dict:
+    """Add many listings at once — used by the 'Paste from Facebook' capture.
+    `items` is a list of payloads (same shape as manual_import). Upserts them
+    all, then runs one amenity/safety/dedup pass for the whole batch."""
+    if not isinstance(items, list):
+        return {"ok": False, "error": "expected a list of listings"}
+    listings, skipped = [], 0
+    for payload in items:
+        li = _payload_to_listing(payload if isinstance(payload, dict) else {})
+        if li is None:
+            skipped += 1
+        else:
+            listings.append(li)
+    if listings:
+        # Default captured items with no determinable area to east_van so they
+        # aren't filtered out of the default view; the user can discard misses.
+        for li in listings:
+            if li.area == "other":
+                li.area = "east_van"
+        db.upsert_listings(listings)
+        _rescore_after_import()
+    return {"ok": True, "imported": len(listings), "skipped": skipped}

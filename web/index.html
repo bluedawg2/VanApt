@@ -120,8 +120,9 @@
     <section class="filter-group counts" id="counts"></section>
 
     <section class="filter-group">
-      <button id="import-toggle" class="btn ghost wide">+ Add a listing manually</button>
-      <p class="hint">For Facebook Marketplace or anything you find elsewhere — paste the link &amp; details so it lives alongside the rest.</p>
+      <button id="fb-toggle" class="btn ghost wide">📥 Import from Facebook</button>
+      <button id="import-toggle" class="btn ghost wide">+ Add one listing by hand</button>
+      <p class="hint">Pull a page of Facebook Marketplace results in one go, or add any single link by hand.</p>
     </section>
   </aside>
 
@@ -171,6 +172,27 @@
     <div class="row gap end">
       <button id="im-cancel" class="btn ghost">Cancel</button>
       <button id="im-save" class="btn primary">Add listing</button>
+    </div>
+  </div>
+</div>
+
+<!-- Facebook Marketplace bulk import modal -->
+<div id="fb-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>📥 Import from Facebook Marketplace</h3>
+    <p class="hint">Grab a whole page of Marketplace results at once. You only do step&nbsp;1 once, ever.</p>
+    <ol class="fb-steps">
+      <li><b>One-time setup:</b> drag this button up onto your bookmarks bar →
+        <a id="fb-bookmark" class="btn primary" href="javascript:(function(){var s={},it=[];document.querySelectorAll('a[href*=&quot;/marketplace/item/&quot;]').forEach(function(a){var m=a.href.match(/\/marketplace\/item\/(\d+)/);if(!m)return;var id=m[1];if(s[id])return;s[id]=1;var L=(a.innerText||'').split('\n').map(function(x){return x.trim()}).filter(Boolean);var pi=L.findIndex(function(x){return /[$]\s?[\d,]/.test(x)});var pl=pi>=0?L[pi]:'';var pm=pl.match(/[$]\s?([\d,]+)/);var pr=pm?Number(pm[1].replace(/,/g,'')):null;var t=(pi>=0&&L[pi+1])?L[pi+1]:'';if(!t){t=L.filter(function(_,i){return i!==pi}).sort(function(a,b){return b.length-a.length})[0]||''}var lo=(pi>=0&&L[pi+2])?L[pi+2]:'';var im=a.querySelector('img');it.push({url:'https://www.facebook.com/marketplace/item/'+id+'/',title:t,price:pr,neighborhood:lo,image_url:im?im.src:'',source:'facebook'})});if(!it.length){alert('No Marketplace listings found here. Open a Marketplace search/results page, scroll down so listings load, then click again.');return}var j=JSON.stringify(it);function d(){alert(it.length+' listing(s) copied! Now open VanApt, click Import from Facebook, paste (Ctrl+V), and Import.')}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(j).then(d,function(){window.prompt('Copy this text (Ctrl+C), then paste into VanApt:',j)})}else{window.prompt('Copy this text (Ctrl+C), then paste into VanApt:',j)}})();" onclick="return false" draggable="true">Grab FB listings</a>
+        <span class="hint">No bookmarks bar showing? Press <b>Ctrl+Shift+B</b>.</span></li>
+      <li>On the Facebook Marketplace <b>Property Rentals</b> page, set your filters and scroll down so listings load.</li>
+      <li>Click the <b>Grab FB listings</b> bookmark. It copies what's on screen.</li>
+      <li>Come back here, click in the box below and paste (<b>Ctrl+V</b>), then Import.</li>
+    </ol>
+    <label>Pasted listings<textarea id="fb-json" rows="3" placeholder="Paste here after clicking the bookmark…"></textarea></label>
+    <div class="row gap end">
+      <button id="fb-cancel" class="btn ghost">Cancel</button>
+      <button id="fb-import" class="btn primary">Import</button>
     </div>
   </div>
 </div>

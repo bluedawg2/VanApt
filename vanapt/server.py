@@ -29,7 +29,7 @@ def _auth_ok(header: str | None) -> bool:
             and hmac.compare_digest(pw, _AUTH_PASS))
 
 # Bump on each deploy so /healthz reveals which build is actually live.
-VERSION = "2026-06-29-safety-5-scroll"
+VERSION = "2026-06-29-fb-bulk-1"
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 _CT = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -163,6 +163,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": ok}, 200 if ok else 400)
         elif u.path == "/api/import":
             self._json(pipeline.manual_import(self._body()))
+        elif u.path == "/api/import_bulk":
+            self._json(pipeline.manual_import_bulk(self._body().get("items")))
         else:
             self._json({"error": "not found"}, 404)
 
