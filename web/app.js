@@ -295,7 +295,7 @@ async function setStatus(uid, status) {
 // ---- status / refresh / sources -------------------------------------------
 async function loadStatus(lineOnly) {
   const s = await fetch("/api/status").then((r) => r.json());
-  if (!lineOnly && !$("#source-filters").children.length) buildSourceFilters(s);
+  if (!lineOnly) buildSourceFilters(s);
   const when = s.last_refresh ? `Updated ${s.last_refresh}` : "Never refreshed — hit Refresh to collect listings";
   if (s.running) {
     $("#status-line").innerHTML = `<span class="spin">↻</span> Collecting listings…`;
@@ -308,15 +308,26 @@ async function loadStatus(lineOnly) {
   return s;
 }
 
+// Build the source checkboxes, MERGING in any newly-seen source (e.g. facebook
+// after an import) without wiping the user's current checked/unchecked state.
 function buildSourceFilters(s) {
   const present = Object.keys((s.counts && s.counts.by_source) || {});
   const known = ["craigslist", "zumper", "kijiji", "rentals_ca", "manual", "facebook"];
   const sources = known.filter((k) => present.includes(k));
   present.forEach((p) => { if (!sources.includes(p)) sources.push(p); });
-  $("#source-filters").innerHTML = sources.map((src) =>
-    `<label class="check"><input type="checkbox" class="src-filter" value="${src}" checked /> ${SOURCE_LABEL[src] || src}</label>`
-  ).join("") || `<span class="hint">No sources yet — hit Refresh.</span>`;
-  $$(".src-filter").forEach((el) => (el.onchange = load));
+  const wrap = $("#source-filters");
+  // Drop the "no sources yet" placeholder once real sources exist.
+  if (sources.length && !$$(".src-filter").length) wrap.innerHTML = "";
+  const have = new Set($$(".src-filter").map((c) => c.value));
+  sources.forEach((src) => {
+    if (have.has(src)) return;
+    const lbl = document.createElement("label");
+    lbl.className = "check";
+    lbl.innerHTML = `<input type="checkbox" class="src-filter" value="${src}" checked /> ${SOURCE_LABEL[src] || src}`;
+    lbl.querySelector("input").onchange = load;
+    wrap.appendChild(lbl);
+  });
+  if (!wrap.children.length) wrap.innerHTML = `<span class="hint">No sources yet — hit Refresh.</span>`;
 }
 
 async function refresh() {
@@ -386,7 +397,10 @@ async function importFacebook() {
   if (r.ok) {
     toast(`Imported ${r.imported} listing${r.imported === 1 ? "" : "s"}` +
           (r.skipped ? ` (${r.skipped} skipped)` : "") + " ✓");
-    openFb(false); $("#fb-json").value = ""; load();
+    openFb(false); $("#fb-json").value = "";
+    // Rebuild source filters first so the new "Facebook" box exists (checked),
+    // otherwise the freshly-imported listings would be filtered straight out.
+    loadStatus(false).then(load);
   } else { toast(r.error || "Import failed"); }
 }
 
