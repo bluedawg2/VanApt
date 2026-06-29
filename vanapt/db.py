@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS listings (
     lease_term    TEXT,                -- 'month-to-month' | '<n>-month' | '1-year' | ''
     safety        INTEGER,             -- 0-100 heuristic vetting score (NULL = not yet scored)
     safety_flags  TEXT,                -- JSON array of {text, kind} reasons
+    crime_pct     INTEGER,             -- VPD block crime percentile 0-100 (NULL = outside grid)
     fingerprint   TEXT,
     dedup_group   TEXT,
     is_primary    INTEGER DEFAULT 1,   -- 1 = shown, 0 = collapsed duplicate
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 _MIGRATION_COLUMNS = {  # name -> SQL type, added to old DBs that predate them
     "furnished": "INTEGER", "parking": "INTEGER",
     "laundry": "TEXT", "lease_term": "TEXT",
-    "safety": "INTEGER", "safety_flags": "TEXT",
+    "safety": "INTEGER", "safety_flags": "TEXT", "crime_pct": "INTEGER",
 }
 
 
@@ -182,8 +183,9 @@ def backfill_safety(score) -> int:
             "lat, lng, neighborhood, address, image_url FROM listings").fetchall()
         for r in rows:
             res = score(dict(r))
-            c.execute("UPDATE listings SET safety=?, safety_flags=? WHERE uid=?",
-                      (res["score"], json.dumps(res["flags"]), r["uid"]))
+            c.execute("UPDATE listings SET safety=?, safety_flags=?, crime_pct=? WHERE uid=?",
+                      (res["score"], json.dumps(res["flags"]),
+                       res.get("block_pct"), r["uid"]))
             n += 1
     return n
 
@@ -210,7 +212,8 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
           areas=None, include_rooms=True, status=None, sort="newest",
           include_other=False, sources=None, available_by=None,
           min_sqft=None, listing_type=None, furnished=False, parking=False,
-          laundry_in_suite=False, month_to_month=False, min_safety=None) -> list[dict]:
+          laundry_in_suite=False, month_to_month=False, min_safety=None,
+          hide_hotspots=False) -> list[dict]:
     sql = "SELECT * FROM listings WHERE is_primary=1"
     args: list = []
     if sources:
@@ -256,6 +259,10 @@ def query(max_price=None, min_price=None, min_bedrooms=None, max_bedrooms=None,
         # data — same policy as price/sqft. They get scored on the next refresh.
         sql += " AND (safety IS NULL OR safety >= ?)"
         args.append(min_safety)
+    if hide_hotspots:
+        # Drop listings in the worst East Van crime blocks (top ~15% by VPD
+        # density). Rows outside the grid (Burnaby / un-geocoded) are kept.
+        sql += " AND (crime_pct IS NULL OR crime_pct < 85)"
     if areas:
         placeholders = ",".join("?" * len(areas))
         sql += f" AND area IN ({placeholders})"

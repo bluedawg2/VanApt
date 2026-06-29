@@ -210,4 +210,7 @@ def safety_score(row: dict) -> dict:
         label = "Some caution"
     else:
         label = "Caution"
-    return {"score": score, "label": label, "flags": flags}
+    return {"score": score, "label": label, "flags": flags,
+            # smoothed VPD crime percentile (0-100, 100 = worst) or None when
+            # outside the gridded area; persisted so the UI can filter/colour.
+            "block_pct": None if pct is None else round(pct)}

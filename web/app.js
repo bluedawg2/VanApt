@@ -7,6 +7,7 @@ const SOURCE_LABEL = {
   rentals_ca: "Rentals.ca", manual: "Manual", facebook: "Facebook",
 };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const SAFETY_COLOR = { good: "#16a34a", warn: "#d97706", bad: "#dc2626", unk: "#6b7280" };
 
 let pollTimer = null;
 let lastItems = [];      // current filtered result set
@@ -38,6 +39,7 @@ function buildQuery() {
 
   const safety = Number($("#safety").value);
   if (safety > 0) p.set("min_safety", safety);
+  if ($("#hide-hotspots").checked) p.set("hide_hotspots", "true");
 
   const type = ($("#type-filters .chip.active") || {}).dataset?.type || "all";
   if (type === "room") p.set("listing_type", "room_share");
@@ -216,6 +218,18 @@ function ensureMap() {
     maxZoom: 19, attribution: "© OpenStreetMap",
   }).addTo(map);
   markerLayer = L.layerGroup().addTo(map);
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const d = L.DomUtil.create("div", "map-legend");
+    d.innerHTML = `<b>Safety</b>
+      <span><i style="background:${SAFETY_COLOR.good}"></i>Looks fine (80+)</span>
+      <span><i style="background:${SAFETY_COLOR.warn}"></i>Some caution (60–79)</span>
+      <span><i style="background:${SAFETY_COLOR.bad}"></i>Caution (&lt;60)</span>
+      <span><i style="background:${SAFETY_COLOR.unk}"></i>Not scored</span>
+      <span><i style="border:2px solid #f59e0b;background:#fff"></i>★ Favorite</span>`;
+    return d;
+  };
+  legend.addTo(map);
   mapReady = true;
 }
 
@@ -226,10 +240,11 @@ function renderMap(items) {
   items.forEach((x) => {
     if (x.lat == null || x.lng == null) return;
     const fav = x.status === "favorite";
-    const color = fav ? "#f59e0b" : x.area === "burnaby" ? "#16a34a" : "#2563eb";
+    // Fill by safety tier; favourites get a thicker gold ring so they stand out.
     const m = L.circleMarker([x.lat, x.lng], {
-      radius: fav ? 9 : 7, color: "#fff", weight: 1.5,
-      fillColor: color, fillOpacity: 0.9,
+      radius: fav ? 10 : 7, color: fav ? "#f59e0b" : "#fff",
+      weight: fav ? 3 : 1.5,
+      fillColor: SAFETY_COLOR[safetyClass(x.safety)], fillOpacity: 0.9,
     });
     const avail = availLabel(x.available_date);
     m.bindPopup(`
@@ -370,6 +385,7 @@ function init() {
   const safetyOut = $("#safety-out");
   const safetySync = () => (safetyOut.textContent = Number(safety.value) > 0 ? safety.value + "+" : "Any");
   safety.oninput = safetySync; safety.onchange = load; safetySync();
+  $("#hide-hotspots").onchange = load;
   buildMonthOptions();
 
   // Price chips set the slider; keep their active state in sync with the slider.

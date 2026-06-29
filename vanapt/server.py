@@ -29,7 +29,7 @@ def _auth_ok(header: str | None) -> bool:
             and hmac.compare_digest(pw, _AUTH_PASS))
 
 # Bump on each deploy so /healthz reveals which build is actually live.
-VERSION = "2026-06-29-safety-2-vpd"
+VERSION = "2026-06-29-safety-3-map"
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 _CT = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -122,6 +122,7 @@ class Handler(BaseHTTPRequestHandler):
                 max_bedrooms=float(one("max_bedrooms")) if one("max_bedrooms") else None,
                 min_sqft=int(one("min_sqft")) if one("min_sqft") else None,
                 min_safety=int(one("min_safety")) if one("min_safety") else None,
+                hide_hotspots=_truthy(one("hide_hotspots", "false")),
                 areas=areas,
                 sources=sources,
                 available_by=one("available_by") or None,
