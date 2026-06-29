@@ -301,6 +301,10 @@ async function loadStatus(lineOnly) {
   if (s.running) {
     $("#status-line").innerHTML = `<span class="spin">↻</span> Collecting listings…`;
     $("#refresh-btn").disabled = true;
+    // A scrape may already be running when the page first loads (e.g. a cold
+    // start). Start polling so the view refreshes itself when it finishes,
+    // instead of sitting frozen on the mid-scrape snapshot until a manual reload.
+    if (!pollTimer) pollTimer = setInterval(() => loadStatus(false), 2000);
   } else {
     $("#status-line").textContent = when;
     $("#refresh-btn").disabled = false;
