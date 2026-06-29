@@ -1,12 +1,16 @@
 # Render Blueprint — creates the whole deployment from this one file.
 # In Render: New ▸ Blueprint ▸ connect the VanApt repo ▸ Apply.
 #
-# What it provisions:
-#   - one always-on web service (the dashboard + API)
-#   - a 1 GB persistent disk for the SQLite DB (favorites/discards survive deploys)
-#   - an internal scheduler that auto-refreshes listings every 24h
-#     (kept inside the web process because a Render disk attaches to only one
-#     service, so a separate cron job can't share the same SQLite file)
+# What it provisions (FREE tier — for a short trial):
+#   - one web service (the dashboard + API) on the free plan
+#   - auto-scrape on cold start, so listings are fresh whenever it wakes
+#
+# Free-plan tradeoffs (by design — no persistent disk on free):
+#   - the instance SLEEPS after ~15 min idle; first load after that is slow
+#     (~1 min: it cold-starts AND scrapes)
+#   - favorites/discards do NOT survive a sleep or redeploy (ephemeral storage)
+#   To keep favorites + always-on, switch plan: free -> starter and add a disk
+#   (see DEPLOYMENT.md) — that's the $7/mo option.
 #
 # You will be prompted for VANAPT_USER / VANAPT_PASS on first apply — those are
 # the login your daughter uses. Pick anything you like.
@@ -15,22 +19,16 @@ services:
   - type: web
     name: vanapt
     runtime: python
-    plan: starter            # $7/mo, always-on (no cold starts). Use "free" to test (sleeps when idle).
+    plan: free               # free trial; sleeps when idle. -> "starter" ($7/mo) for always-on.
     region: oregon           # closest Render region to Vancouver
     buildCommand: pip install -r requirements.txt
     startCommand: python run.py
     autoDeploy: true         # redeploy automatically on git push
     healthCheckPath: /
-    disk:
-      name: vanapt-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"
-      - key: VANAPT_DATA_DIR        # SQLite lives on the persistent disk
-        value: /var/data
-      - key: VANAPT_REFRESH_HOURS   # auto-refresh interval (hours)
+      - key: VANAPT_REFRESH_HOURS   # refresh interval (free instance scrapes on each cold start too)
         value: "24"
       - key: VANAPT_USER            # login username — you set this on apply
         sync: false
