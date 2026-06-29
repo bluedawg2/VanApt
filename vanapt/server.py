@@ -29,7 +29,7 @@ def _auth_ok(header: str | None) -> bool:
             and hmac.compare_digest(pw, _AUTH_PASS))
 
 # Bump on each deploy so /healthz reveals which build is actually live.
-VERSION = "2026-06-29-safety-4-ui"
+VERSION = "2026-06-29-safety-5-scroll"
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 _CT = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
