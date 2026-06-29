@@ -91,6 +91,11 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- routing ----
     def do_GET(self):
+        # Health check must bypass auth, else the platform's probe gets a 401
+        # and the deploy never goes live.
+        if urllib.parse.urlparse(self.path).path == "/healthz":
+            self._json({"ok": True})
+            return
         if not self._guard():
             return
         u = urllib.parse.urlparse(self.path)
