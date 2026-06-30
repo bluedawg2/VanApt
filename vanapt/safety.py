@@ -227,10 +227,25 @@ _BEST_WEIGHTS = {
     "safety": 0.30,       # the heuristic safety score above
     "price": 0.30,        # value vs. her budget (cheaper = better, to a point)
     "unit": 0.12,         # whole unit beats a shared room
-    "completeness": 0.13, # photo + size + beds + located + real description
-    "amenities": 0.08,    # in-suite laundry / parking / furnished / month-to-month
-    "freshness": 0.07,    # recently posted ranks above stale reposts
+    "space": 0.10,        # usable size — a 100 ft² 'unit' is really a room
+    "completeness": 0.07, # photo + size + beds + located + real description
+    "amenities": 0.06,    # in-suite laundry / parking / furnished / month-to-month
+    "freshness": 0.05,    # recently posted ranks above stale reposts
 }
+
+
+def _space_score(row: dict) -> float:
+    """Usable size. Full marks at ~500+ ft², fading to 0 by ~150 ft² (a closet).
+    Unknown size is neutral (0.5) — never punished for silence, but a known,
+    tiny footprint (the 100 ft² 'room with shared kitchen') is pushed down hard."""
+    sqft = row.get("sqft")
+    if not sqft:
+        return 0.5
+    if sqft >= 500:
+        return 1.0
+    if sqft <= 150:
+        return 0.0
+    return (sqft - 150) / 350.0
 
 
 def _freshness(row: dict) -> float:
@@ -302,10 +317,11 @@ def best_score(row: dict, safety: int | None) -> int:
         amen += 0.10
     s_amen = min(1.0, amen)
 
+    s_space = _space_score(row)
     s_fresh = _freshness(row)
 
     w = _BEST_WEIGHTS
     total = (w["safety"] * s_safety + w["price"] * s_price + w["unit"] * s_unit
-             + w["completeness"] * s_comp + w["amenities"] * s_amen
-             + w["freshness"] * s_fresh)
+             + w["space"] * s_space + w["completeness"] * s_comp
+             + w["amenities"] * s_amen + w["freshness"] * s_fresh)
     return round(100 * total)

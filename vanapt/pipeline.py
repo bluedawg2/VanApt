@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from . import config, db, dedup, scrapers
 from .geo import classify_area
 from .safety import safety_score, best_score
-from .models import (Listing, parse_bedrooms, parse_price, parse_sqft,
-                     parse_available_date, looks_like_room_share, parse_amenities)
+from .models import (Listing, ROOM_SQFT_MAX, parse_bedrooms, parse_price,
+                     parse_sqft, parse_available_date, looks_like_room_share,
+                     parse_amenities)
 
 # Refresh runs in a background thread; this tracks live status for the UI.
 _state = {"running": False, "started": None, "finished": None,
@@ -43,10 +45,57 @@ def _relevant(li: Listing) -> bool:
     return True
 
 
+def _enrich_kept(listings) -> int:
+    """Craigslist's bulk feed omits the description, so a room-in-a-house looks
+    like a whole 'unit' and an absurdly small space goes unflagged. For the
+    (much smaller) kept set, give each posting a description, then re-derive size
+    + room-share. Descriptions already captured on a prior refresh are reused
+    from the DB (no re-fetch, and they survive the empty bulk-feed value on
+    upsert), so steady-state refreshes only hit detail pages for *new* postings.
+    Returns how many listings were re-tagged as room-shares."""
+    from .scrapers import craigslist
+    cl = [li for li in listings if li.source == "craigslist"]
+    if not cl:
+        return 0
+
+    existing = db.descriptions_by_uid()
+    todo = []
+    for li in cl:
+        if (li.description or "").strip():
+            continue
+        prev = existing.get(li.uid())
+        if prev:
+            li.description = prev   # reuse — preserves it through upsert
+        else:
+            todo.append(li)         # genuinely new -> fetch the detail page
+
+    def _one(li):
+        desc = craigslist.fetch_description(li.url)
+        if desc:
+            li.description = desc
+
+    if todo:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(_one, todo))
+
+    retagged = 0
+    for li in cl:
+        desc = li.description or ""
+        if not li.sqft:
+            li.sqft = parse_sqft(desc)
+        if li.listing_type == "unit" and (
+                looks_like_room_share(li.title, desc)
+                or (li.sqft and li.sqft < ROOM_SQFT_MAX)):
+            li.listing_type = "room_share"
+            retagged += 1
+    return retagged
+
+
 def _refresh_worker(only):
     try:
         res = scrapers.run_all(only=only)
         kept = [li for li in res["listings"] if _relevant(li)]
+        retagged = _enrich_kept(kept)
         up = db.upsert_listings(kept)
         db.reclassify_all(classify_area)  # heal any older mis-tagged rows
         db.backfill_amenities(parse_amenities)  # furnished/parking/laundry/lease tags
@@ -55,6 +104,7 @@ def _refresh_worker(only):
         summary = {
             "scraped": len(res["listings"]),
             "kept": len(kept),
+            "rooms_retagged": retagged,
             "new": up["new"],
             "updated": up["updated"],
             "duplicates_collapsed": collapsed,

@@ -13,6 +13,8 @@ from __future__ import annotations
 import datetime
 import json
 
+from bs4 import BeautifulSoup
+
 from .. import config
 from ..geo import classify_area
 from ..models import (Listing, parse_bedrooms, parse_sqft,
@@ -140,6 +142,33 @@ def _decode_items(data: dict, listing_type: str) -> list[Listing]:
         except Exception:
             continue  # one malformed item never breaks the batch
     return out
+
+
+def fetch_description(url: str) -> str:
+    """Fetch one posting's detail page and return its body text plus the
+    structured attribute chips (bedrooms, ft², housing type, laundry, parking).
+
+    The bulk sapi feed carries none of this, so a room-in-someone's-house reads
+    as a whole 'unit' until we read the actual post. Returns '' on any failure
+    so a single unreachable page never breaks a refresh."""
+    try:
+        html = fetch(url)
+    except Exception:
+        return ""
+    soup = BeautifulSoup(html, "html.parser")
+    parts: list[str] = []
+    body = soup.select_one("#postingbody")
+    if body:
+        for junk in body.select(".print-information, .print-qrcode-container"):
+            junk.decompose()
+        txt = body.get_text(" ", strip=True).replace("QR Code Link to This Post", "").strip()
+        if txt:
+            parts.append(txt)
+    attrs = [a.get_text(" ", strip=True)
+             for a in soup.select(".attrgroup span") if a.get_text(strip=True)]
+    if attrs:
+        parts.append(" · ".join(attrs))
+    return "\n".join(parts)
 
 
 def scrape() -> list[Listing]:

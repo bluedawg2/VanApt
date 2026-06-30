@@ -174,9 +174,18 @@ def parse_available_date(text: str, today: datetime.date | None = None) -> str:
     return ""
 
 
+# Below this many ft² a self-contained suite essentially doesn't exist in this
+# market — it's a room in someone's home. Used as a backstop when the detail
+# page's description can't be fetched.
+ROOM_SQFT_MAX = 200
+
 _ROOM_HINTS = re.compile(
-    r"\b(roommate|room ?mate|room for rent|shared|share .{0,12}(apartment|place|suite|condo|house)"
-    r"|looking for a? ?(roommate|female|male|person)|private room|room available)\b",
+    r"\b(roommate|room ?mate|room for rent|rooms? (for rent|available)"
+    r"|furnished room|private room|room rental"
+    r"|room in (a |an |the )?(house|home|apartment|suite|condo)"
+    r"|shared (kitchen|bath|bathroom|washroom)"
+    r"|share .{0,12}(apartment|place|suite|condo|house|kitchen)"
+    r"|looking for a? ?(roommate|female|male|person))\b",
     re.I,
 )
 

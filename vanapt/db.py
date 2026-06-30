@@ -135,6 +135,17 @@ def all_rows() -> list[sqlite3.Row]:
         return c.execute("SELECT * FROM listings").fetchall()
 
 
+def descriptions_by_uid() -> dict:
+    """uid -> stored description, for rows that already have one. Lets a refresh
+    reuse detail-page text it already captured instead of re-fetching (and
+    avoids the empty bulk-feed description clobbering it on upsert)."""
+    with _lock, _conn() as c:
+        rows = c.execute(
+            "SELECT uid, description FROM listings "
+            "WHERE description IS NOT NULL AND description != ''").fetchall()
+    return {r["uid"]: r["description"] for r in rows}
+
+
 def reclassify_all(classify) -> int:
     """Re-run area classification over every stored row using the current
     logic. Heals listings that were mis-tagged by an older version. Returns the
