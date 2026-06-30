@@ -135,6 +135,26 @@ def all_rows() -> list[sqlite3.Row]:
         return c.execute("SELECT * FROM listings").fetchall()
 
 
+_BACKUP_COLS = ("url", "title", "description", "price", "bedrooms", "bathrooms",
+                "sqft", "listing_type", "neighborhood", "address", "area",
+                "image_url", "contact", "available_date", "source", "lat", "lng",
+                "posted_at", "status")
+
+
+def manual_backup_payloads(scraped_sources) -> list[dict]:
+    """Every hand-entered / Facebook row (anything not produced by a scraper),
+    shaped as import payloads so they can be re-imported verbatim later. Status
+    (favorite/discarded) is preserved so her decisions survive too."""
+    if not scraped_sources:
+        scraped_sources = ("",)
+    ph = ",".join("?" * len(scraped_sources))
+    with _lock, _conn() as c:
+        rows = c.execute(
+            f"SELECT * FROM listings WHERE source NOT IN ({ph})",
+            tuple(scraped_sources)).fetchall()
+    return [{k: r[k] for k in _BACKUP_COLS} for r in rows]
+
+
 def descriptions_by_uid() -> dict:
     """uid -> stored description, for rows that already have one. Lets a refresh
     reuse detail-page text it already captured instead of re-fetching (and

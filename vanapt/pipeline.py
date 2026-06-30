@@ -6,7 +6,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config, db, dedup, scrapers
+from . import backup, config, db, dedup, scrapers
 from .geo import classify_area
 from .safety import safety_score, best_score
 from .models import (Listing, ROOM_SQFT_MAX, parse_bedrooms, parse_price,
@@ -186,6 +186,52 @@ def _rescore_after_import() -> None:
     dedup.rebuild()
 
 
+def _backup_manual_async() -> None:
+    """Mirror all manual/Facebook rows to GitHub so a redeploy or sleep can't
+    lose them. Runs off-thread so it never delays the import response. No-op
+    unless GITHUB_TOKEN + GITHUB_REPO are configured."""
+    if not backup.enabled():
+        return
+
+    def _run():
+        try:
+            payloads = db.manual_backup_payloads(tuple(config.ENABLED_SOURCES))
+            backup.backup(payloads)
+        except Exception as e:  # pragma: no cover - best effort
+            print(f"  manual backup failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def restore_manual() -> int:
+    """Re-import manual/Facebook rows from the GitHub backup (used on a fresh
+    boot after the disk was wiped). Preserves favorite/discarded status.
+    Returns how many were restored."""
+    if not backup.enabled():
+        return 0
+    payloads = backup.restore()
+    if not payloads:
+        return 0
+    res = manual_import_bulk(payloads, _is_restore=True)
+    for p in payloads:
+        st = p.get("status")
+        if st and st != "new":
+            li = _payload_to_listing(p)
+            if li:
+                db.set_status(li.uid(), st)
+    if res.get("imported"):
+        _rescore_after_import()
+    return res.get("imported", 0)
+
+
+def restore_manual_async() -> None:
+    """Kick off restore_manual in the background so boot isn't blocked on the
+    network. No-op unless backup is configured."""
+    if not backup.enabled():
+        return
+    threading.Thread(target=restore_manual, daemon=True).start()
+
+
 def manual_import(payload: dict) -> dict:
     """Add a single listing by hand (e.g. a Facebook Marketplace post she found).
     Required: url. Everything else is parsed from a pasted blob or fields."""
@@ -194,13 +240,16 @@ def manual_import(payload: dict) -> dict:
         return {"ok": False, "error": "url is required"}
     db.upsert_listings([li])
     _rescore_after_import()
+    _backup_manual_async()
     return {"ok": True, "uid": li.uid(), "area": li.area}
 
 
-def manual_import_bulk(items) -> dict:
+def manual_import_bulk(items, _is_restore: bool = False) -> dict:
     """Add many listings at once — used by the 'Paste from Facebook' capture.
     `items` is a list of payloads (same shape as manual_import). Upserts them
-    all, then runs one amenity/safety/dedup pass for the whole batch."""
+    all, then runs one amenity/safety/dedup pass for the whole batch.
+    `_is_restore` suppresses the backup write when we're restoring *from* a
+    backup, so a fresh boot doesn't immediately rewrite what it just read."""
     if not isinstance(items, list):
         return {"ok": False, "error": "expected a list of listings"}
     listings, skipped = [], 0
@@ -218,4 +267,6 @@ def manual_import_bulk(items) -> dict:
                 li.area = "east_van"
         db.upsert_listings(listings)
         _rescore_after_import()
+        if not _is_restore:
+            _backup_manual_async()
     return {"ok": True, "imported": len(listings), "skipped": skipped}

@@ -186,8 +186,11 @@ def _start_scheduler():
     def _loop():
         import time as _t
         # Populate right away on a fresh deploy (empty disk), else wait a cycle.
+        # Gauge "empty" by *scraped* rows only — a manual/FB restore can land
+        # first and must not trick us into skipping the initial scrape.
         try:
-            if not db.counts().get("total"):
+            by_src = db.counts().get("by_source", {})
+            if not any(by_src.get(s) for s in config.ENABLED_SOURCES):
                 pipeline.refresh(blocking=True)
         except Exception as e:
             print(f"  initial refresh failed: {e}")
@@ -204,6 +207,7 @@ def _start_scheduler():
 
 def serve(host="127.0.0.1", port=8777):
     db.init()
+    pipeline.restore_manual_async()  # repopulate manual/FB imports after a wipe
     _start_scheduler()
     httpd = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
