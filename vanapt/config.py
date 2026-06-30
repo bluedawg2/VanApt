@@ -46,6 +46,12 @@ CRAIGSLIST_DETAIL_CAP = 25
 CRAIGSLIST_DETAIL_DELAY = (0.4, 1.0)   # jittered seconds between detail fetches
 CRAIGSLIST_FEED_DELAY = (0.2, 0.5)     # jittered seconds between bulk-feed requests
 
+# Craigslist hard-blocks our IP (403), so when the SCRAPERAPI_KEY env var is set
+# its requests route through ScraperAPI's rotating residential IPs (see
+# scrapers/base.fetch). ScraperAPI retries the target internally and can be slow,
+# so its requests get this longer timeout regardless of the caller's value.
+SCRAPERAPI_TIMEOUT = 70
+
 # Polite, browser-like headers. Sites are far less likely to block a
 # residential machine sending these than a bare urllib request.
 USER_AGENT = (

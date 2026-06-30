@@ -163,7 +163,7 @@ def fetch_description(url: str, timeout: int = 8) -> str:
     (incl. timeout) so a single slow/blocked page never stalls a refresh — a
     short timeout matters because a datacenter IP gets throttled here."""
     try:
-        html = fetch(url, timeout=timeout)
+        html = fetch(url, timeout=timeout, proxy=True)
     except urllib.error.HTTPError as e:
         if e.code == 403:
             raise Blocked(url) from e   # signal the caller to back off
@@ -197,7 +197,7 @@ def scrape() -> list[Listing]:
                 time.sleep(random.uniform(d_lo, d_hi))  # don't fire all 14 at once
             first = False
             try:
-                text = fetch(_build_url(search_path, lo, hi))
+                text = fetch(_build_url(search_path, lo, hi), proxy=True)
                 data = json.loads(text).get("data", {})
                 for li in _decode_items(data, lt):
                     seen[li.url] = li

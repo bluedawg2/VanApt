@@ -34,3 +34,8 @@ services:
         sync: false
       - key: VANAPT_PASS            # login password — you set this on apply
         sync: false
+      - key: SCRAPERAPI_KEY         # Craigslist hard-blocks our IP; this routes its
+        sync: false                 # requests through ScraperAPI (scraperapi.com, free 1k/mo).
+                                    # Leave unset to fetch Craigslist directly.
+      # - key: SCRAPERAPI_PARAMS    # optional: extra ScraperAPI opts, default "country_code=ca".
+      #   value: "country_code=ca&premium=true"   # add premium=true if basic IPs still get 403
