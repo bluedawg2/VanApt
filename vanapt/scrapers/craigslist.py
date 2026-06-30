@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import random
+import time
+import urllib.error
 
 from bs4 import BeautifulSoup
 
@@ -29,6 +32,13 @@ CATEGORIES = [
     ("apa", "unit"),        # apartments / housing for rent
     ("roo", "room_share"),  # rooms & shares (roommate wanted)
 ]
+
+
+class Blocked(Exception):
+    """Craigslist refused the request (HTTP 403) — almost always an IP/rate
+    block, not a bad URL. Raised by fetch_description() so the caller can stop
+    hitting detail pages before the block escalates and takes out the bulk feed
+    too (both share one IP)."""
 
 
 def _build_url(search_path: str, lo: int, hi: int) -> str:
@@ -144,15 +154,20 @@ def _decode_items(data: dict, listing_type: str) -> list[Listing]:
     return out
 
 
-def fetch_description(url: str) -> str:
+def fetch_description(url: str, timeout: int = 8) -> str:
     """Fetch one posting's detail page and return its body text plus the
     structured attribute chips (bedrooms, ft², housing type, laundry, parking).
 
     The bulk sapi feed carries none of this, so a room-in-someone's-house reads
     as a whole 'unit' until we read the actual post. Returns '' on any failure
-    so a single unreachable page never breaks a refresh."""
+    (incl. timeout) so a single slow/blocked page never stalls a refresh — a
+    short timeout matters because a datacenter IP gets throttled here."""
     try:
-        html = fetch(url)
+        html = fetch(url, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            raise Blocked(url) from e   # signal the caller to back off
+        return ""
     except Exception:
         return ""
     soup = BeautifulSoup(html, "html.parser")
@@ -174,8 +189,13 @@ def fetch_description(url: str) -> str:
 def scrape() -> list[Listing]:
     seen: dict[str, Listing] = {}
     errors = 0
+    d_lo, d_hi = config.CRAIGSLIST_FEED_DELAY
+    first = True
     for search_path, lt in CATEGORIES:
         for (lo, hi) in config.CRAIGSLIST_PRICE_BANDS:
+            if not first:
+                time.sleep(random.uniform(d_lo, d_hi))  # don't fire all 14 at once
+            first = False
             try:
                 text = fetch(_build_url(search_path, lo, hi))
                 data = json.loads(text).get("data", {})

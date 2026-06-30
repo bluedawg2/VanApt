@@ -2,9 +2,9 @@
 import for login-walled sources (Facebook Marketplace, etc.)."""
 from __future__ import annotations
 
+import random
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from . import backup, config, db, dedup, scrapers
 from .geo import classify_area
@@ -52,7 +52,14 @@ def _enrich_kept(listings) -> int:
     + room-share. Descriptions already captured on a prior refresh are reused
     from the DB (no re-fetch, and they survive the empty bulk-feed value on
     upsert), so steady-state refreshes only hit detail pages for *new* postings.
-    Returns how many listings were re-tagged as room-shares."""
+
+    Detail pages are bot-detectable HTML hits and share an IP with the bulk feed
+    we must NOT lose, so we fetch them defensively: capped per refresh, one at a
+    time with a jittered pause, and with a circuit breaker that stops the instant
+    Craigslist 403s — better to miss a few descriptions than to provoke a block
+    that kills the feed. An aborted/failed fetch only costs a description; the
+    listing is kept regardless. Returns how many listings were re-tagged as
+    room-shares."""
     from .scrapers import craigslist
     cl = [li for li in listings if li.source == "craigslist"]
     if not cl:
@@ -69,14 +76,15 @@ def _enrich_kept(listings) -> int:
         else:
             todo.append(li)         # genuinely new -> fetch the detail page
 
-    def _one(li):
-        desc = craigslist.fetch_description(li.url)
+    lo, hi = config.CRAIGSLIST_DETAIL_DELAY
+    for li in todo[:config.CRAIGSLIST_DETAIL_CAP]:
+        try:
+            desc = craigslist.fetch_description(li.url)
+        except craigslist.Blocked:
+            break   # circuit breaker: stop before the block escalates to the feed
         if desc:
             li.description = desc
-
-    if todo:
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            list(pool.map(_one, todo))
+        time.sleep(random.uniform(lo, hi))
 
     retagged = 0
     for li in cl:

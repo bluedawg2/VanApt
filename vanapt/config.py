@@ -36,6 +36,16 @@ ENABLED_SOURCES = {
 # Per-request network timeout (seconds)
 HTTP_TIMEOUT = 20
 
+# Craigslist detail-page (description) fetching. The bulk sapi feed is the source
+# of truth we must NOT lose; detail pages are HTML hits that look far more bot-like,
+# so an aggressive burst can get the whole IP 403-banned — which also kills the feed.
+# We therefore fetch descriptions gently: a hard cap on new pages per refresh, one
+# at a time with a jittered pause, and a circuit breaker that stops the moment
+# Craigslist returns 403. Set CRAIGSLIST_DETAIL_CAP = 0 to disable detail fetching.
+CRAIGSLIST_DETAIL_CAP = 25
+CRAIGSLIST_DETAIL_DELAY = (0.4, 1.0)   # jittered seconds between detail fetches
+CRAIGSLIST_FEED_DELAY = (0.2, 0.5)     # jittered seconds between bulk-feed requests
+
 # Polite, browser-like headers. Sites are far less likely to block a
 # residential machine sending these than a bare urllib request.
 USER_AGENT = (
