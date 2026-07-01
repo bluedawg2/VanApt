@@ -48,7 +48,8 @@ def _build_url(search_path: str, lo: int, hi: int) -> str:
         f"min_price={lo}", f"max_price={hi}",
     ]
     if search_path == "apa":
-        parts += [f"min_bedrooms={config.DEFAULT_MIN_BEDROOMS}", "max_bedrooms=2"]
+        parts += [f"min_bedrooms={config.DEFAULT_MIN_BEDROOMS}",
+                  f"max_bedrooms={config.COLLECT_MAX_BEDROOMS}"]
     return f"{SAPI}?{'&'.join(parts)}"
 
 

@@ -34,8 +34,9 @@ are remembered between sessions.
 
 | Control | What it does |
 |---|---|
+| **Quick picks** | Two one-click presets: **🏠 Whole 2–3BR apartment** (a place of her own) and **🤝 Room with a roommate** (join someone else's place). Each just sets the bedrooms + type below, which you can then tweak. |
 | **Max price slider** | Drag down to tighten the budget. Quick chips for ≤ $1500 / $1800 / $2000. |
-| **Bedrooms** | Studio / 1 BR / 2 BR (any combination). Default is 1 BR. |
+| **Bedrooms** | Studio / 1 BR / 2 BR / 3+ BR (any combination). The **3+ BR** box is open-ended, so ticking **2 BR + 3+ BR** means "2 or more". Default is 1 BR. |
 | **Area** | East Van and/or Burnaby. |
 | **Sources** | Toggle Craigslist / Zumper / Kijiji / Rentals.ca / Manual on or off. |
 | **Move-in by** | Show only places available now or by a chosen month (listings with no stated date are kept, not hidden). |

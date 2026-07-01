@@ -39,8 +39,10 @@ def _relevant(li: Listing) -> bool:
         return False
     if li.price is not None and li.price > config.COLLECT_MAX_PRICE:
         return False
-    # Whole units: keep studio/1BR (and 2BR, which may host a room-share).
-    if li.listing_type == "unit" and li.bedrooms is not None and li.bedrooms > 2:
+    # Whole units: keep studio/1BR up to COLLECT_MAX_BEDROOMS (2-/3-BR places
+    # she could share). Room-shares pass regardless of bedroom count.
+    if (li.listing_type == "unit" and li.bedrooms is not None
+            and li.bedrooms > config.COLLECT_MAX_BEDROOMS):
         return False
     return True
 

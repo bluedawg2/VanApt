@@ -20,7 +20,10 @@ function buildQuery() {
   const beds = $$(".beds:checked").map((c) => parseFloat(c.value));
   if (beds.length) {
     p.set("min_bedrooms", Math.min(...beds));
-    p.set("max_bedrooms", Math.max(...beds));
+    // The top bedroom box ("3 BR") is treated as "3+": if it's the highest one
+    // checked, leave max open so 2+3 == "2+ bedrooms" and larger shares show too.
+    const topBed = Math.max(...$$(".beds").map((c) => parseFloat(c.value)));
+    if (Math.max(...beds) < topBed) p.set("max_bedrooms", Math.max(...beds));
   } else {
     p.set("max_bedrooms", "0");
   }
@@ -293,6 +296,21 @@ async function setStatus(uid, status) {
   load();
 }
 
+// ---- quick-pick presets ----------------------------------------------------
+// Her two options: a whole 2–3BR apartment, or a room in someone's place
+// (roommate wanted). Each preset just drives the existing controls, then loads.
+function applyPreset(name) {
+  // Whole-apartment: 2–3 BR units. Roommate: show every room-share regardless of
+  // bedroom count — room posts often encode the *room* offered ("1 bedroom for
+  // rent"), not the apartment size, so a 2+ floor would wrongly hide them.
+  const beds = name === "roommate" ? ["0", "1", "2", "3"] : ["2", "3"];
+  $$(".beds").forEach((c) => (c.checked = beds.includes(c.value)));
+  const type = name === "roommate" ? "room" : "unit";
+  $$("[data-type]").forEach((c) => c.classList.toggle("active", c.dataset.type === type));
+  $$("[data-preset]").forEach((b) => b.classList.toggle("active", b.dataset.preset === name));
+  load();
+}
+
 // ---- status / refresh / sources -------------------------------------------
 async function loadStatus(lineOnly) {
   const s = await fetch("/api/status").then((r) => r.json());
@@ -434,12 +452,18 @@ function init() {
     $$("[data-price]").forEach((c) => c.classList.toggle("active", c === ch));
     load();
   }));
+  // Quick-pick presets (whole 2–3BR apartment / room with a roommate).
+  $$("[data-preset]").forEach((b) => (b.onclick = () => applyPreset(b.dataset.preset)));
+  // Any manual change to beds/type means we're no longer on a clean preset.
+  const clearPreset = () => $$("[data-preset]").forEach((b) => b.classList.remove("active"));
   // Listing-type chips (All / Whole units / Shared rooms) are single-select.
   $$("[data-type]").forEach((ch) => (ch.onclick = () => {
     $$("[data-type]").forEach((c) => c.classList.toggle("active", c === ch));
+    clearPreset();
     load();
   }));
-  $$(".beds, .area, .amen").forEach((el) => (el.onchange = load));
+  $$(".beds").forEach((el) => (el.onchange = () => { clearPreset(); load(); }));
+  $$(".area, .amen").forEach((el) => (el.onchange = load));
   $("#status-filter").onchange = load;
   $("#sort").onchange = load;
   $("#available-by").onchange = load;

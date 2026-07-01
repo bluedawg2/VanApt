@@ -8,6 +8,10 @@ DEFAULT_MIN_BEDROOMS = 1
 DEFAULT_MAX_BEDROOMS = 1
 INCLUDE_ROOM_SHARES = True        # 2BR looking-for-roommate / room-in-shared
 
+# Largest whole unit we collect/keep. 3 lets her see 2- and 3-bedroom apartments
+# (a bigger place to share). Room-shares are kept regardless of this cap.
+COLLECT_MAX_BEDROOMS = 3
+
 # Collection-time ceiling. We never store anything above this (keeps the DB
 # focused on relevant inventory). UI filtering happens below this.
 COLLECT_MAX_PRICE = 2200

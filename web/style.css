@@ -48,6 +48,13 @@ select, input[type=text], input[type=url], input[type=number], textarea {
   padding: 5px 12px; cursor: pointer; font-size: 13px; }
 .chip:hover, .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 .hint { font-size: 11px; color: var(--muted); margin: 3px 0 0; line-height: 1.35; }
+.quick-picks { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px; gap: 8px; }
+.preset { width: 100%; text-align: left; border: 1px solid var(--line);
+  background: #fff; border-radius: 8px; padding: 9px 12px; cursor: pointer;
+  font-size: 14px; font-weight: 600; font-family: inherit; }
+.preset:hover { border-color: var(--brand); }
+.preset.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 .counts { font-size: 13px; color: var(--muted); gap: 3px; border-top: 1px solid var(--line); padding-top: 14px; }
 .counts b { color: var(--ink); }
 

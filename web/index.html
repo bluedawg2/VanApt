@@ -18,6 +18,13 @@
 
 <div class="layout">
   <aside class="sidebar">
+    <section class="filter-group quick-picks">
+      <label class="lbl">Quick picks</label>
+      <button class="preset" data-preset="whole">🏠 Whole 2–3BR apartment</button>
+      <button class="preset" data-preset="roommate">🤝 Room with a roommate</button>
+      <p class="hint">One click sets the bedrooms &amp; type below. Tweak anything afterward.</p>
+    </section>
+
     <section class="filter-group">
       <label class="lbl">Max price <output id="price-out">$1500</output></label>
       <input id="price" type="range" min="800" max="2200" step="50" value="1500" />
@@ -47,6 +54,7 @@
         <label class="check"><input type="checkbox" class="beds" value="0" /> Studio</label>
         <label class="check"><input type="checkbox" class="beds" value="1" checked /> 1 BR</label>
         <label class="check"><input type="checkbox" class="beds" value="2" /> 2 BR</label>
+        <label class="check"><input type="checkbox" class="beds" value="3" /> 3+ BR</label>
       </div>
     </section>
 
