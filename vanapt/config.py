@@ -16,6 +16,10 @@ COLLECT_MAX_BEDROOMS = 3
 # focused on relevant inventory). UI filtering happens below this.
 COLLECT_MAX_PRICE = 2200
 
+# A 3+ bedroom apartment justifies a higher budget (rent gets split), so those
+# are collected up to this ceiling; studios/1BR/2BR/rooms stay at COLLECT_MAX_PRICE.
+COLLECT_MAX_PRICE_3BR = 4000
+
 # Craigslist price bands. RSS returns only the ~25 most-recent items per query,
 # so we slice the price range into bands to widen coverage substantially.
 CRAIGSLIST_PRICE_BANDS = [
@@ -26,6 +30,14 @@ CRAIGSLIST_PRICE_BANDS = [
     (1600, 1750),
     (1750, 1900),
     (1900, COLLECT_MAX_PRICE),
+]
+
+# Extra high-price bands queried for 3-bedroom apartments only (min_bedrooms=3),
+# so pricier family-sized units get collected without pulling $3k one-bedrooms.
+CRAIGSLIST_PRICE_BANDS_3BR = [
+    (COLLECT_MAX_PRICE, 2800),
+    (2800, 3400),
+    (3400, COLLECT_MAX_PRICE_3BR),
 ]
 
 # Which scrapers run on refresh. Disable any that get noisy/blocked.

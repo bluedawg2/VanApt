@@ -100,10 +100,14 @@ python run.py --port 9000     # use a different port
 ## Configuration (`vanapt/config.py`)
 
 - `COLLECT_MAX_PRICE` — hard ceiling for what's collected (default $2200).
+- `COLLECT_MAX_PRICE_3BR` — higher ceiling just for 3-bedroom apartments (default
+  $4000), since a bigger place justifies a bigger budget when rent is split.
+- `COLLECT_MAX_BEDROOMS` — largest whole unit collected (default 3).
 - `DEFAULT_TARGET_PRICE` — the budget you usually slide down to ($1500).
 - `ENABLED_SOURCES` — turn individual sites on/off.
 - `EAST_VAN_BBOX` / `BURNABY_BBOX` / `*_HOODS` — area definitions.
-- `CRAIGSLIST_PRICE_BANDS` — price slices used to widen Craigslist coverage.
+- `CRAIGSLIST_PRICE_BANDS` / `CRAIGSLIST_PRICE_BANDS_3BR` — price slices used to
+  widen Craigslist coverage (the 3BR bands pull pricier family-sized units).
 
 ## Project layout
 

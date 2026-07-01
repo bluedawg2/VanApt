@@ -37,7 +37,12 @@ def _relevant(li: Listing) -> bool:
     """Collection-time filter: keep only plausibly-relevant inventory."""
     if li.area not in ("east_van", "burnaby"):
         return False
-    if li.price is not None and li.price > config.COLLECT_MAX_PRICE:
+    # 3+ BR apartments get a higher price ceiling (rent gets split); everything
+    # else stays capped at COLLECT_MAX_PRICE.
+    ceiling = config.COLLECT_MAX_PRICE
+    if li.bedrooms is not None and li.bedrooms >= 3:
+        ceiling = config.COLLECT_MAX_PRICE_3BR
+    if li.price is not None and li.price > ceiling:
         return False
     # Whole units: keep studio/1BR up to COLLECT_MAX_BEDROOMS (2-/3-BR places
     # she could share). Room-shares pass regardless of bedroom count.

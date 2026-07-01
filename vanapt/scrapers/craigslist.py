@@ -41,14 +41,16 @@ class Blocked(Exception):
     too (both share one IP)."""
 
 
-def _build_url(search_path: str, lo: int, hi: int) -> str:
+def _build_url(search_path: str, lo: int, hi: int,
+               min_beds: int | None = None) -> str:
     parts = [
         f"batch={VANCOUVER_AREA}-0-360-0-0",
         "cc=US", "lang=en", f"searchPath={search_path}",
         f"min_price={lo}", f"max_price={hi}",
     ]
     if search_path == "apa":
-        parts += [f"min_bedrooms={config.DEFAULT_MIN_BEDROOMS}",
+        mb = config.DEFAULT_MIN_BEDROOMS if min_beds is None else min_beds
+        parts += [f"min_bedrooms={mb}",
                   f"max_bedrooms={config.COLLECT_MAX_BEDROOMS}"]
     return f"{SAPI}?{'&'.join(parts)}"
 
@@ -191,20 +193,31 @@ def scrape() -> list[Listing]:
     seen: dict[str, Listing] = {}
     errors = 0
     d_lo, d_hi = config.CRAIGSLIST_FEED_DELAY
-    first = True
+
+    # (search_path, listing_type, lo, hi, min_beds). The standard bands cover
+    # every category up to COLLECT_MAX_PRICE; the extra bands pull 3-BR
+    # apartments only, up to their higher ceiling.
+    queries: list[tuple[str, str, int, int, int | None]] = []
     for search_path, lt in CATEGORIES:
         for (lo, hi) in config.CRAIGSLIST_PRICE_BANDS:
-            if not first:
-                time.sleep(random.uniform(d_lo, d_hi))  # don't fire all 14 at once
-            first = False
-            try:
-                text = fetch(_build_url(search_path, lo, hi), proxy=True)
-                data = json.loads(text).get("data", {})
-                for li in _decode_items(data, lt):
-                    seen[li.url] = li
-            except Exception:
-                errors += 1
-                continue
+            queries.append((search_path, lt, lo, hi, None))
+    for (lo, hi) in config.CRAIGSLIST_PRICE_BANDS_3BR:
+        queries.append(("apa", "unit", lo, hi, 3))
+
+    first = True
+    for (search_path, lt, lo, hi, min_beds) in queries:
+        if not first:
+            time.sleep(random.uniform(d_lo, d_hi))  # don't fire them all at once
+        first = False
+        try:
+            text = fetch(_build_url(search_path, lo, hi, min_beds=min_beds),
+                         proxy=True)
+            data = json.loads(text).get("data", {})
+            for li in _decode_items(data, lt):
+                seen[li.url] = li
+        except Exception:
+            errors += 1
+            continue
     if not seen and errors:
         raise RuntimeError(f"craigslist: all {errors} API requests failed")
     return list(seen.values())

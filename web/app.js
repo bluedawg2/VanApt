@@ -296,6 +296,16 @@ async function setStatus(uid, status) {
   load();
 }
 
+// Set the price slider + its label + chip highlight from one place, so presets
+// and chips stay in sync.
+function setPrice(v) {
+  const price = $("#price");
+  price.value = String(v);
+  $("#price-out").textContent = "$" + Number(price.value).toLocaleString();
+  $$("[data-price]").forEach((c) =>
+    c.classList.toggle("active", Number(c.dataset.price) === Number(price.value)));
+}
+
 // ---- quick-pick presets ----------------------------------------------------
 // Her two options: a whole 2–3BR apartment, or a room in someone's place
 // (roommate wanted). Each preset just drives the existing controls, then loads.
@@ -307,6 +317,9 @@ function applyPreset(name) {
   $$(".beds").forEach((c) => (c.checked = beds.includes(c.value)));
   const type = name === "roommate" ? "room" : "unit";
   $$("[data-type]").forEach((c) => c.classList.toggle("active", c.dataset.type === type));
+  // A whole 3BR runs higher, so open the budget to $4000 — otherwise the
+  // default budget would hide every 3-bedroom and the preset looks empty.
+  if (name === "whole") setPrice(4000);
   $$("[data-preset]").forEach((b) => b.classList.toggle("active", b.dataset.preset === name));
   load();
 }
